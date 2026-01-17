@@ -63,4 +63,11 @@ logs/
 tmp/
 test-plugin.settings.gradle.kts
 paper-generator.settings.gradle.kts
-paper-server/src/minecraft/
+
+# Paper fork generated content (created by applyPatches)
+paper-api/
+paper-server/
+.gradle/caches/paperweight/
+
+# Paperweight generated minecraft sources (embedded git repos)
+pewpew-server/src/minecraft/
