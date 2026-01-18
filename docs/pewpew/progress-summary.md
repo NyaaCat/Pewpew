@@ -88,6 +88,11 @@
 - Normalized SparklyPaper-derived patch files (block entity tickers, ServerEntity delta, per-world MSPT) and removed obsolete patch-context fix.
 - Fixed Pewpew config + MSPT command patch headers; `:pewpew-server:applyAllServerPatches` now succeeds.
 - Updated patch workflow docs to use tmp-based patched sources and to apply Pewpew patches after Paper patches.
+- Verified per-world ticking is gated by `pewpew.yml` feature flags (defaults disabled in bench harness) and is enabled via `PewpewConfig` system properties at startup.
+- World tick workers now use `TickThread` to satisfy tick-thread checks when per-world ticking is enabled.
+- Reviewed async AI flow: `AsyncAcquirePoi` snapshots chunk sections per request (`SnapshotPathNavigationRegion.capture` copies `LevelChunkSection.states`), so snapshot churn is likely the regression; full entity tick off-thread is impractical without major world-write isolation.
+- Added a per-tick section cache for async pathing snapshots and wired `AsyncAcquirePoi` to reuse cached section copies per world tick.
+- Made `RedstoneWireTurbo` thread-local to avoid cross-world concurrency when per-world ticking is enabled.
 
 ## Build / test status
 - `./gradlew build` succeeds (warnings about deprecated APIs only).
@@ -105,9 +110,8 @@
   - `docs/pewpew/findings/multiverse-bench-report.md`
 
 ## Planned next steps
-1) Clean tmp Paper sources, regenerate patches from a fresh patched source, and re-run build + tests to validate patch application.
-2) Fix async pathfinding/sensor snapshot workflow end-to-end (commit queue, generation validation, pathfinding context compatibility).
-3) Verify per-world ticking performance vs baseline, then scale async worker counts and capture thread snapshots.
-4) Investigate redstone anomalies under parallel ticking and confirm tick-thread safety.
-5) Review SparklyPaper 1.21.8→1.21.11 changes for adoptable optimizations.
-6) After current benchmarks, investigate chunk/block-state access costs and feasibility of off-thread entity tick/snapshot optimizations.
+1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
+2) Measure async pathfinding regression again to confirm the per-tick section cache reduces snapshot overhead; iterate if regression persists.
+3) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
+4) Review SparklyPaper 1.21.8→1.21.11 diff for adoptable optimizations and document candidates/risks.
+5) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
