@@ -72,6 +72,13 @@
 - Synced patch files for async changes and config wiring:
   - Regenerated `AsyncSensorService` and `AsyncAcquirePoi` file patches from current sources.
   - Added `PewpewConfig` file patch and feature patch to init it in `PaperBootstrap` and `CraftServer`.
+- Undid accidental full patch rebuild; removed regenerated patch series and kept only intended changes.
+- Adopted SparklyPaper 1.21.8 → 1.21.11 perf patches:
+  - Block entity ticker removal optimization (`BlockEntityTickersList` + Level removal path).
+  - Skip `ServerEntity` delta check when movement unchanged.
+  - Per-world MSPT tracking and `/mspt` world breakdown.
+- Committed each patch file separately and moved branch to `version/1.21.8`.
+- Updated root `README.md` with the minimal patch workflow and the safe-to-ignore `logo.png` warning.
 
 ## Build / test status
 - `./gradlew :pewpew-server:test` succeeded (warnings only).
@@ -89,6 +96,6 @@
   - `docs/pewpew/findings/multiverse-bench-report.md`
 
 ## Planned next steps
-1) Update perf summaries in `docs/pewpew/findings/perf-report.md` with new results if needed.
-2) Investigate the `logo.png` file patch error from `rebuildPaperServerFilePatches` and decide if a patch update is required.
-3) Re-run the multiworld benchmark if new parameters are needed.
+1) Run A/B benchmarks: per-world ticking only vs baseline, plus async path/sensor with higher worker counts.
+2) Analyze profiler-v23/v24 hotspots and plan snapshot/async optimizations (including mob spawn ticking).
+3) Investigate redstone anomalies under parallel ticking and confirm tick-thread safety.
