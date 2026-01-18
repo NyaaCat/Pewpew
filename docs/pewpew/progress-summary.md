@@ -93,6 +93,7 @@
 - Reviewed async AI flow: `AsyncAcquirePoi` snapshots chunk sections per request (`SnapshotPathNavigationRegion.capture` copies `LevelChunkSection.states`), so snapshot churn is likely the regression; full entity tick off-thread is impractical without major world-write isolation.
 - Added a per-tick section cache for async pathing snapshots and wired `AsyncAcquirePoi` to reuse cached section copies per world tick.
 - Made `RedstoneWireTurbo` thread-local to avoid cross-world concurrency when per-world ticking is enabled.
+- Started reviewing SparklyPaper 1.21.8→1.21.11 patch diffs; changes so far appear to be API event additions and safety checks (no new perf candidates identified yet).
 
 ## Build / test status
 - `./gradlew build` succeeds (warnings about deprecated APIs only).
@@ -113,5 +114,5 @@
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
 2) Measure async pathfinding regression again to confirm the per-tick section cache reduces snapshot overhead; iterate if regression persists.
 3) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
-4) Review SparklyPaper 1.21.8→1.21.11 diff for adoptable optimizations and document candidates/risks.
+4) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
 5) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
