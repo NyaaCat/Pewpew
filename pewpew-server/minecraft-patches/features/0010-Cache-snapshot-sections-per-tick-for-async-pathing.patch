@@ -1,0 +1,166 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sun, 18 Jan 2026 17:05:49 +0000
+Subject: [PATCH] Cache snapshot sections per tick for async pathing
+
+
+diff --git a/net/minecraft/world/entity/ai/behavior/AsyncAcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AsyncAcquirePoi.java
+index d953be6dc2c5fc4902553410e3f2a68e9346e59d..babade9720c2f21fe77e542927af53cd72445887 100644
+--- a/net/minecraft/world/entity/ai/behavior/AsyncAcquirePoi.java
++++ b/net/minecraft/world/entity/ai/behavior/AsyncAcquirePoi.java
+@@ -37,6 +37,8 @@ public final class AsyncAcquirePoi {
+     private static final String MAX_PENDING_PROPERTY = "pewpew.asyncPathfinding.maxPending";
+     private static final AsyncAcquirePoi INSTANCE = new AsyncAcquirePoi();
+     private static final ThreadLocal<PathfindingContext> PATHFINDER_CONTEXT = ThreadLocal.withInitial(PathfindingContext::new);
++    private static final java.util.concurrent.ConcurrentHashMap<String, SnapshotPathNavigationRegion.SectionCache> REGION_CACHES =
++        new java.util.concurrent.ConcurrentHashMap<>();
+ 
+     private final java.util.concurrent.ConcurrentHashMap<UUID, PendingRequest> pending = new java.util.concurrent.ConcurrentHashMap<>();
+     private final AtomicBoolean initialized = new AtomicBoolean();
+@@ -51,6 +53,7 @@ public final class AsyncAcquirePoi {
+ 
+     public static void invalidateWorld(final String worldName) {
+         INSTANCE.pending.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
++        REGION_CACHES.remove(worldName);
+     }
+ 
+     public static boolean schedule(
+@@ -98,6 +101,7 @@ public final class AsyncAcquirePoi {
+         if (!(navigation instanceof GroundPathNavigation)) {
+             return false;
+         }
++        final String worldName = level.getWorld().getName();
+         final UUID mobId = mob.getUUID();
+         if (this.pending.containsKey(mobId)) {
+             return true;
+@@ -116,7 +120,7 @@ public final class AsyncAcquirePoi {
+             mobId,
+             mob.blockPosition(),
+             MobPathSnapshot.from(mob),
+-            SnapshotPathNavigationRegion.capture(level, captureMin(mob), captureMax(mob)),
++            SnapshotPathNavigationRegion.capture(level, captureMin(mob), captureMax(mob), cacheForWorld(worldName)),
+             targets,
+             navigation.getMaxPathLength(),
+             accuracy,
+@@ -130,7 +134,7 @@ public final class AsyncAcquirePoi {
+             entityEventId,
+             retryMap,
+             time,
+-            WorldTickCoordinator.get().currentGeneration(level.getWorld().getName())
++            WorldTickCoordinator.get().currentGeneration(worldName)
+         );
+         if (this.pending.putIfAbsent(mobId, request) != null) {
+             return true;
+@@ -151,6 +155,10 @@ public final class AsyncAcquirePoi {
+         this.executor = (ThreadPoolExecutor)PewpewAsyncPool.get();
+     }
+ 
++    private static SnapshotPathNavigationRegion.SectionCache cacheForWorld(final String worldName) {
++        return REGION_CACHES.computeIfAbsent(worldName, key -> new SnapshotPathNavigationRegion.SectionCache());
++    }
++
+     private boolean shouldScheduleAsync(final ThreadPoolExecutor executor) {
+         final int maxPending = Math.max(256, Integer.getInteger(
+             MAX_PENDING_PROPERTY,
+@@ -314,4 +322,4 @@ public final class AsyncAcquirePoi {
+             }
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java b/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
+index a019e862a7c13dda92483e41ff3cf3f8010bdfb7..1107234b841ad52d94d016afe63396f5b6a96afc 100644
+--- a/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
++++ b/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
+@@ -1,5 +1,6 @@
+ package net.minecraft.world.level.pathfinder;
+ 
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+ import java.util.List;
+ import javax.annotation.Nullable;
+ import net.minecraft.core.BlockPos;
+@@ -57,6 +58,18 @@ public final class SnapshotPathNavigationRegion implements CollisionGetter {
+     }
+ 
+     public static SnapshotPathNavigationRegion capture(ServerLevel level, BlockPos minPos, BlockPos maxPos) {
++        return capture(level, minPos, maxPos, null);
++    }
++
++    public static SnapshotPathNavigationRegion capture(
++        ServerLevel level,
++        BlockPos minPos,
++        BlockPos maxPos,
++        @Nullable SectionCache cache
++    ) {
++        if (cache != null) {
++            cache.reset(level.getGameTime());
++        }
+         int minChunkX = SectionPos.blockToSectionCoord(Math.min(minPos.getX(), maxPos.getX()));
+         int maxChunkX = SectionPos.blockToSectionCoord(Math.max(minPos.getX(), maxPos.getX()));
+         int minChunkZ = SectionPos.blockToSectionCoord(Math.min(minPos.getZ(), maxPos.getZ()));
+@@ -90,9 +103,15 @@ public final class SnapshotPathNavigationRegion implements CollisionGetter {
+                         continue;
+                     }
+                     LevelChunkSection section = chunk.getSection(sectionIndex);
+-                    sectionVersions[sectionY - minSectionY] = section.getChangeVersion();
++                    long version = section.getChangeVersion();
++                    sectionVersions[sectionY - minSectionY] = version;
+                     if (!section.hasOnlyAir()) {
+-                        sectionStates[sectionY - minSectionY] = section.states.copy();
++                        if (cache == null) {
++                            sectionStates[sectionY - minSectionY] = section.states.copy();
++                        } else {
++                            long sectionKey = SectionPos.asLong(cx, sectionY, cz);
++                            sectionStates[sectionY - minSectionY] = cache.snapshot(section, version, sectionKey);
++                        }
+                     }
+                 }
+                 chunks[cx - minChunkX][cz - minChunkZ] = SnapshotChunk.loaded(sectionStates, sectionVersions);
+@@ -246,6 +265,39 @@ public final class SnapshotPathNavigationRegion implements CollisionGetter {
+         return this.height;
+     }
+ 
++    public static final class SectionCache {
++        private long tickId = Long.MIN_VALUE;
++        private final Long2ObjectOpenHashMap<SectionSnapshot> sections = new Long2ObjectOpenHashMap<>();
++
++        public void reset(long tickId) {
++            if (this.tickId == tickId) {
++                return;
++            }
++            this.tickId = tickId;
++            this.sections.clear();
++        }
++
++        private PalettedContainer<BlockState> snapshot(LevelChunkSection section, long version, long sectionKey) {
++            SectionSnapshot cached = this.sections.get(sectionKey);
++            if (cached != null && cached.version == version) {
++                return cached.states;
++            }
++            PalettedContainer<BlockState> copy = section.states.copy();
++            this.sections.put(sectionKey, new SectionSnapshot(version, copy));
++            return copy;
++        }
++
++        private static final class SectionSnapshot {
++            private final long version;
++            private final PalettedContainer<BlockState> states;
++
++            private SectionSnapshot(long version, PalettedContainer<BlockState> states) {
++                this.version = version;
++                this.states = states;
++            }
++        }
++    }
++
+     private static final class SnapshotChunk {
+         private static final SnapshotChunk MISSING = new SnapshotChunk(false, new PalettedContainer[0], new long[0]);
+ 
+@@ -267,4 +319,4 @@ public final class SnapshotPathNavigationRegion implements CollisionGetter {
+             return new SnapshotChunk(true, sectionStates, sectionVersions);
+         }
+     }
+-}
+\ No newline at end of file
++}
