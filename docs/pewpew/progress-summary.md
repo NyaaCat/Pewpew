@@ -94,6 +94,8 @@
 - Added a per-tick section cache for async pathing snapshots and wired `AsyncAcquirePoi` to reuse cached section copies per world tick.
 - Made `RedstoneWireTurbo` thread-local to avoid cross-world concurrency when per-world ticking is enabled.
 - Started reviewing SparklyPaper 1.21.8→1.21.11 patch diffs; changes so far appear to be API event additions and safety checks (no new perf candidates identified yet).
+- Re-ran singleworld bench with async pathfinding on + sensors off (cache enabled): avgMSPT 49.59 vs baseline 49.02 (+1.18%); regression reduced from prior +11.8%.
+- Multiworld run with world tick coordinator enabled crashed in chunk system (`LevelTicks.addContainer` AIOOB in fastutil); crash report saved at `tmp/bench/runs/multiverse-worldtick-on-3-multiworld/pewpew/crash-reports/crash-2026-01-18_18.52.42-server.txt`.
 
 ## Build / test status
 - `./gradlew build` succeeds (warnings about deprecated APIs only).
