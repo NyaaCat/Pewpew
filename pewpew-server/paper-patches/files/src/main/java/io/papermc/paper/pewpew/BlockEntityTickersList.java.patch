@@ -1,0 +1,73 @@
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/pewpew/BlockEntityTickersList.java
+@@ -1,0 +_,70 @@
++package io.papermc.paper.pewpew;
++
++import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
++import it.unimi.dsi.fastutil.objects.ObjectArrayList;
++import java.util.Arrays;
++import java.util.Collection;
++import net.minecraft.world.level.block.entity.TickingBlockEntity;
++
++/**
++ * A specialized list for ServerLevel block entity tickers.
++ *
++ * <p>Behaves like {@link ObjectArrayList}, but supports removing entries by
++ * index after the tick loop to avoid repeated array shifts.</p>
++ */
++public final class BlockEntityTickersList extends ObjectArrayList<TickingBlockEntity> {
++    private final IntOpenHashSet toRemove = new IntOpenHashSet();
++    private int startSearchFromIndex = -1;
++
++    public BlockEntityTickersList() {
++        super();
++    }
++
++    public BlockEntityTickersList(final Collection<? extends TickingBlockEntity> c) {
++        super(c);
++    }
++
++    public void markAsRemoved(final int index) {
++        if (this.startSearchFromIndex == -1) {
++            this.startSearchFromIndex = index;
++        }
++        this.toRemove.add(index);
++    }
++
++    public void removeMarkedEntries() {
++        if (this.startSearchFromIndex == -1) {
++            return;
++        }
++        removeAllByIndex(this.startSearchFromIndex, this.toRemove);
++        this.toRemove.clear();
++        this.startSearchFromIndex = -1;
++    }
++
++    private void removeAllByIndex(final int startIndex, final IntOpenHashSet indices) {
++        final int requiredMatches = indices.size();
++        if (requiredMatches == 0) {
++            return;
++        }
++
++        final Object[] storage = this.a;
++        int dest = startIndex;
++        int matches = 0;
++        for (int i = startIndex; i < size; i++) {
++            if (!indices.contains(i)) {
++                storage[dest++] = storage[i];
++            } else {
++                matches++;
++            }
++
++            if (matches == requiredMatches) {
++                if (i != (size - 1)) {
++                    System.arraycopy(storage, i + 1, storage, dest, size - i - 1);
++                }
++                dest = size - requiredMatches;
++                break;
++            }
++        }
++        Arrays.fill(storage, dest, size, null);
++        size = dest;
++    }
++}
