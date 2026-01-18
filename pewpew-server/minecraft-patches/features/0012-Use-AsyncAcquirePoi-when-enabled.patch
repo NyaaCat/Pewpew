@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sun, 18 Jan 2026 23:40:10 +0000
+Subject: [PATCH] Use AsyncAcquirePoi when enabled
+
+
+diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+index 57befff1f0675e889304a6258258384d8de02c87..de0816a959eec64e6fedeab08f29d810bf739f94 100644
+--- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
++++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+@@ -94,6 +94,13 @@ public class AcquirePoi {
+                                 }
+                             }
+                             // Paper end - optimise POI access
++                            int accuracy = 1;
++                            for (Pair<Holder<PoiType>, BlockPos> pair : set) {
++                                accuracy = Math.max(accuracy, pair.getFirst().value().validRange());
++                            }
++                            if (AsyncAcquirePoi.schedule(level, mob, set, accuracy, acquirablePois, acquiringMemory, entityEventId, map, time)) {
++                                return true;
++                            }
+                             Path path = findPathToPois(mob, set);
+                             if (path != null && path.canReach()) {
+                                 BlockPos target = path.getTarget();
