@@ -1,0 +1,344 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix <w@m.ac>
+Date: Sun, 18 Jan 2026 01:06:38 +0900
+Subject: [PATCH] Add tick thread pool and barrier
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index 0138aab1e335228555e996156a1734dcfbf9f688..558a369cb73192fe6ff9dc50806e799f26b39edb 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -5,16 +5,25 @@ import java.util.LinkedHashMap;
+ import java.util.Map;
+ import java.util.Objects;
+ import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.LinkedBlockingQueue;
++import java.util.concurrent.RejectedExecutionException;
++import java.util.concurrent.ThreadFactory;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.concurrent.atomic.AtomicInteger;
+ import java.util.concurrent.atomic.AtomicLong;
++import java.util.concurrent.atomic.AtomicReference;
+ import java.util.concurrent.atomic.LongAdder;
+ 
+ public final class WorldTickCoordinator {
+     private static final String ENABLE_PROPERTY = "pewpew.worldTickCoordinator";
+     private static final String TESTING_PROPERTY = "pewpew.worldTickCoordinator.testing";
+     private static final String STALL_THRESHOLD_PROPERTY = "pewpew.worldTickCoordinator.stallThresholdNanos";
++    private static final String WORKER_COUNT_PROPERTY = "pewpew.worldTickCoordinator.workers";
+     private static final long DEFAULT_STALL_THRESHOLD_NANOS = 50_000_000L;
++    private static final String THREAD_NAME_PREFIX = "Pewpew-Tick-";
+ 
+     private static final WorldTickCoordinator INSTANCE = new WorldTickCoordinator();
+ 
+@@ -22,6 +31,9 @@ public final class WorldTickCoordinator {
+     private final ConcurrentHashMap<String, WorldTickMetrics> metricsByWorld = new ConcurrentHashMap<>();
+     private final LongAdder stallCount = new LongAdder();
+     private final AtomicLong maxStallNanos = new AtomicLong();
++    private final AtomicInteger threadIds = new AtomicInteger();
++    private final Object executorLock = new Object();
++    private volatile ThreadPoolExecutor executor;
+ 
+     private WorldTickCoordinator() {
+     }
+@@ -39,13 +51,52 @@ public final class WorldTickCoordinator {
+     }
+ 
+     public void init() {
+-        if (!isEnabled()) {
++        if (!isActive()) {
+             return;
+         }
+         if (!this.initialized.compareAndSet(false, true)) {
+             return;
+         }
+-        // Placeholder for future initialization.
++        this.executor = createExecutor();
++    }
++
++    public TickBarrier dispatchWorldTicks(final Map<String, Runnable> worldTasks) {
++        Objects.requireNonNull(worldTasks, "worldTasks");
++        if (worldTasks.isEmpty()) {
++            return TickBarrier.completed();
++        }
++        if (!isEnabled()) {
++            runInline(worldTasks);
++            return TickBarrier.completed();
++        }
++        init();
++        final ThreadPoolExecutor localExecutor = ensureExecutor();
++        if (localExecutor == null) {
++            runInline(worldTasks);
++            return TickBarrier.completed();
++        }
++        final TickBarrier barrier = new TickBarrier(this, worldTasks.size());
++        for (final Map.Entry<String, Runnable> entry : worldTasks.entrySet()) {
++            final String worldName = Objects.requireNonNull(entry.getKey(), "worldName");
++            final Runnable task = Objects.requireNonNull(entry.getValue(), "task");
++            try {
++                localExecutor.execute(() -> runWorldTask(barrier, worldName, task));
++            } catch (final RejectedExecutionException rejected) {
++                runWorldTask(barrier, worldName, task);
++            }
++            recordQueueDepth(worldName, localExecutor.getQueue().size());
++        }
++        return barrier;
++    }
++
++    public void shutdownForTesting() {
++        final ThreadPoolExecutor localExecutor = this.executor;
++        if (localExecutor == null) {
++            return;
++        }
++        localExecutor.shutdownNow();
++        this.executor = null;
++        this.initialized.set(false);
+     }
+ 
+     public long recordWorldTickStart(final String worldName) {
+@@ -107,6 +158,74 @@ public final class WorldTickCoordinator {
+         );
+     }
+ 
++    private ThreadPoolExecutor ensureExecutor() {
++        ThreadPoolExecutor current = this.executor;
++        if (current != null) {
++            return current;
++        }
++        synchronized (this.executorLock) {
++            current = this.executor;
++            if (current != null) {
++                return current;
++            }
++            if (!isActive()) {
++                return null;
++            }
++            current = createExecutor();
++            this.executor = current;
++            return current;
++        }
++    }
++
++    private ThreadPoolExecutor createExecutor() {
++        final int workers = Math.max(1, Integer.getInteger(
++            WORKER_COUNT_PROPERTY,
++            Math.max(1, Runtime.getRuntime().availableProcessors() - 1)
++        ));
++        final ThreadFactory factory = runnable -> {
++            final Thread thread = new Thread(runnable, THREAD_NAME_PREFIX + this.threadIds.incrementAndGet());
++            if (Boolean.getBoolean(TESTING_PROPERTY)) {
++                thread.setDaemon(true);
++            }
++            return thread;
++        };
++        final ThreadPoolExecutor pool = new ThreadPoolExecutor(
++            workers,
++            workers,
++            0L,
++            TimeUnit.MILLISECONDS,
++            new LinkedBlockingQueue<>(),
++            factory
++        );
++        pool.prestartAllCoreThreads();
++        return pool;
++    }
++
++    private void runInline(final Map<String, Runnable> worldTasks) {
++        for (final Map.Entry<String, Runnable> entry : worldTasks.entrySet()) {
++            final String worldName = Objects.requireNonNull(entry.getKey(), "worldName");
++            final Runnable task = Objects.requireNonNull(entry.getValue(), "task");
++            final long start = recordWorldTickStart(worldName);
++            try {
++                task.run();
++            } finally {
++                recordWorldTickEnd(worldName, start);
++            }
++        }
++    }
++
++    private void runWorldTask(final TickBarrier barrier, final String worldName, final Runnable task) {
++        final long start = recordWorldTickStart(worldName);
++        try {
++            task.run();
++        } catch (final Throwable throwable) {
++            barrier.recordFailure(throwable);
++        } finally {
++            recordWorldTickEnd(worldName, start);
++            barrier.countDown();
++        }
++    }
++
+     private WorldTickMetrics metricsFor(final String worldName) {
+         Objects.requireNonNull(worldName, "worldName");
+         return this.metricsByWorld.computeIfAbsent(worldName, key -> new WorldTickMetrics());
+@@ -165,4 +284,79 @@ public final class WorldTickCoordinator {
+         long maxStallNanos
+     ) {
+     }
++
++    public static final class TickBarrier {
++        private static final TickBarrier COMPLETED = new TickBarrier();
++
++        private final WorldTickCoordinator coordinator;
++        private final CountDownLatch latch;
++        private final AtomicReference<Throwable> failure;
++        private final AtomicBoolean waitRecorded;
++        private final long startNanos;
++
++        private TickBarrier() {
++            this.coordinator = null;
++            this.latch = new CountDownLatch(0);
++            this.failure = new AtomicReference<>();
++            this.waitRecorded = new AtomicBoolean(true);
++            this.startNanos = 0L;
++        }
++
++        private TickBarrier(final WorldTickCoordinator coordinator, final int taskCount) {
++            this.coordinator = coordinator;
++            this.latch = new CountDownLatch(taskCount);
++            this.failure = new AtomicReference<>();
++            this.waitRecorded = new AtomicBoolean();
++            this.startNanos = System.nanoTime();
++        }
++
++        public static TickBarrier completed() {
++            return COMPLETED;
++        }
++
++        public void await() throws InterruptedException {
++            this.latch.await();
++            recordWait();
++            rethrowIfFailed();
++        }
++
++        public boolean await(final long timeout, final TimeUnit unit) throws InterruptedException {
++            final boolean done = this.latch.await(timeout, unit);
++            recordWait();
++            if (done) {
++                rethrowIfFailed();
++            }
++            return done;
++        }
++
++        private void recordFailure(final Throwable throwable) {
++            this.failure.compareAndSet(null, throwable);
++        }
++
++        private void countDown() {
++            this.latch.countDown();
++        }
++
++        private void recordWait() {
++            if (this.coordinator == null) {
++                return;
++            }
++            if (!this.waitRecorded.compareAndSet(false, true)) {
++                return;
++            }
++            final long waited = System.nanoTime() - this.startNanos;
++            this.coordinator.recordCoordinatorWait(waited);
++        }
++
++        private void rethrowIfFailed() {
++            final Throwable thrown = this.failure.get();
++            if (thrown == null) {
++                return;
++            }
++            if (thrown instanceof RuntimeException runtimeException) {
++                throw runtimeException;
++            }
++            throw new IllegalStateException("Tick task failed", thrown);
++        }
++    }
+ }
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8e0b30bfac9aaf49404cbba48051935bdfbeed96
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+@@ -0,0 +1,82 @@
++package io.papermc.paper.pewpew;
++
++import java.util.LinkedHashMap;
++import java.util.Map;
++import java.util.concurrent.ConcurrentHashMap;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertNotEquals;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++@Normal
++class WorldTickCoordinatorThreadPoolTest {
++    @Test
++    void dispatchRunsOnTickThreadsWhenEnabled() throws Exception {
++        final String previousEnabled = System.getProperty("pewpew.worldTickCoordinator");
++        final String previousTesting = System.getProperty("pewpew.worldTickCoordinator.testing");
++        final String previousWorkers = System.getProperty("pewpew.worldTickCoordinator.workers");
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        try {
++            System.setProperty("pewpew.worldTickCoordinator", "true");
++            System.setProperty("pewpew.worldTickCoordinator.testing", "true");
++            System.setProperty("pewpew.worldTickCoordinator.workers", "2");
++            coordinator.init();
++
++            final Map<String, Runnable> tasks = new LinkedHashMap<>();
++            final Map<String, String> threadNames = new ConcurrentHashMap<>();
++            final String mainThread = Thread.currentThread().getName();
++            tasks.put("world_one", () -> threadNames.put("world_one", Thread.currentThread().getName()));
++            tasks.put("world_two", () -> threadNames.put("world_two", Thread.currentThread().getName()));
++
++            final WorldTickCoordinator.TickBarrier barrier = coordinator.dispatchWorldTicks(tasks);
++            barrier.await();
++
++            assertEquals(2, threadNames.size());
++            assertNotEquals(mainThread, threadNames.get("world_one"));
++            assertNotEquals(mainThread, threadNames.get("world_two"));
++            assertTrue(threadNames.get("world_one").startsWith("Pewpew-Tick-"));
++            assertTrue(threadNames.get("world_two").startsWith("Pewpew-Tick-"));
++        } finally {
++            coordinator.shutdownForTesting();
++            restoreProperty("pewpew.worldTickCoordinator", previousEnabled);
++            restoreProperty("pewpew.worldTickCoordinator.testing", previousTesting);
++            restoreProperty("pewpew.worldTickCoordinator.workers", previousWorkers);
++        }
++    }
++
++    @Test
++    void dispatchRunsInlineWhenDisabled() throws Exception {
++        final String previousEnabled = System.getProperty("pewpew.worldTickCoordinator");
++        final String previousTesting = System.getProperty("pewpew.worldTickCoordinator.testing");
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        try {
++            System.clearProperty("pewpew.worldTickCoordinator");
++            System.clearProperty("pewpew.worldTickCoordinator.testing");
++
++            final Map<String, Runnable> tasks = new LinkedHashMap<>();
++            final Map<String, String> threadNames = new ConcurrentHashMap<>();
++            final String mainThread = Thread.currentThread().getName();
++            tasks.put("world_one", () -> threadNames.put("world_one", Thread.currentThread().getName()));
++
++            final WorldTickCoordinator.TickBarrier barrier = coordinator.dispatchWorldTicks(tasks);
++            barrier.await();
++
++            assertEquals(1, threadNames.size());
++            assertEquals(mainThread, threadNames.get("world_one"));
++        } finally {
++            coordinator.shutdownForTesting();
++            restoreProperty("pewpew.worldTickCoordinator", previousEnabled);
++            restoreProperty("pewpew.worldTickCoordinator.testing", previousTesting);
++        }
++    }
++
++    private static void restoreProperty(final String key, final String value) {
++        if (value == null) {
++            System.clearProperty(key);
++            return;
++        }
++        System.setProperty(key, value);
++    }
++}

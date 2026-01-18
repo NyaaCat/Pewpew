@@ -1,0 +1,42 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorGenerationTest.java
+@@ -1,0 +_,39 @@
++package io.papermc.paper.pewpew;
++
++import java.util.List;
++import java.util.Map;
++import java.util.concurrent.atomic.AtomicInteger;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertNull;
++
++@Normal
++class WorldTickCoordinatorGenerationTest {
++    @Test
++    void invalidateWorldClearsSnapshotAndCommits() {
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        final String worldName = "generation_world";
++
++        final SnapshotManager.Snapshot snapshot = coordinator.publishSnapshot(
++            worldName,
++            1L,
++            Map.of("chunks", 1L)
++        );
++        assertEquals(coordinator.currentGeneration(worldName), snapshot.generationId());
++
++        final AtomicInteger commits = new AtomicInteger();
++        coordinator.enqueueCommit(worldName, snapshot.generationId(), commits::incrementAndGet);
++        final int drained = coordinator.drainCommits(List.of(worldName));
++        assertEquals(1, drained);
++        assertEquals(1, commits.get());
++
++        coordinator.enqueueCommit(worldName, snapshot.generationId(), commits::incrementAndGet);
++        coordinator.invalidateWorld(worldName);
++
++        assertNull(coordinator.getSnapshot(worldName));
++        final int drainedAfter = coordinator.drainCommits(List.of(worldName));
++        assertEquals(0, drainedAfter);
++    }
++}

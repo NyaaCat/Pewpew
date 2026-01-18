@@ -1,0 +1,80 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/ThreadLocalIsolationTest.java
+@@ -1,0 +_,77 @@
++package io.papermc.paper.pewpew;
++
++import java.util.concurrent.atomic.AtomicReference;
++import net.minecraft.core.BlockPos;
++import net.minecraft.world.level.block.SaplingBlock;
++import org.bukkit.TreeType;
++import org.bukkit.craftbukkit.block.CraftBlockEntityState;
++import org.bukkit.craftbukkit.event.CraftEventFactory;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertNull;
++
++@Normal
++class ThreadLocalIsolationTest {
++    @Test
++    void saplingTreeTypeIsThreadLocal() throws InterruptedException {
++        SaplingBlock.treeTypeRT.set(TreeType.ACACIA);
++        AtomicReference<TreeType> initial = new AtomicReference<>();
++        AtomicReference<TreeType> after = new AtomicReference<>();
++
++        Thread thread = new Thread(() -> {
++            initial.set(SaplingBlock.treeTypeRT.get());
++            SaplingBlock.treeTypeRT.set(TreeType.BIRCH);
++            after.set(SaplingBlock.treeTypeRT.get());
++        });
++        thread.start();
++        thread.join();
++
++        assertNull(initial.get());
++        assertEquals(TreeType.BIRCH, after.get());
++        assertEquals(TreeType.ACACIA, SaplingBlock.treeTypeRT.get());
++        SaplingBlock.treeTypeRT.remove();
++    }
++
++    @Test
++    void sourceBlockOverrideIsThreadLocal() throws InterruptedException {
++        BlockPos mainPos = new BlockPos(1, 2, 3);
++        CraftEventFactory.sourceBlockOverrideRT.set(mainPos);
++        AtomicReference<BlockPos> initial = new AtomicReference<>();
++        AtomicReference<BlockPos> after = new AtomicReference<>();
++
++        Thread thread = new Thread(() -> {
++            initial.set(CraftEventFactory.sourceBlockOverrideRT.get());
++            CraftEventFactory.sourceBlockOverrideRT.set(new BlockPos(4, 5, 6));
++            after.set(CraftEventFactory.sourceBlockOverrideRT.get());
++        });
++        thread.start();
++        thread.join();
++
++        assertNull(initial.get());
++        assertEquals(new BlockPos(4, 5, 6), after.get());
++        assertEquals(mainPos, CraftEventFactory.sourceBlockOverrideRT.get());
++        CraftEventFactory.sourceBlockOverrideRT.remove();
++    }
++
++    @Test
++    void disableSnapshotIsThreadLocal() throws InterruptedException {
++        CraftBlockEntityState.DISABLE_SNAPSHOT.set(Boolean.TRUE);
++        AtomicReference<Boolean> initial = new AtomicReference<>();
++        AtomicReference<Boolean> after = new AtomicReference<>();
++
++        Thread thread = new Thread(() -> {
++            initial.set(CraftBlockEntityState.DISABLE_SNAPSHOT.get());
++            CraftBlockEntityState.DISABLE_SNAPSHOT.set(Boolean.TRUE);
++            after.set(CraftBlockEntityState.DISABLE_SNAPSHOT.get());
++        });
++        thread.start();
++        thread.join();
++
++        assertEquals(Boolean.FALSE, initial.get());
++        assertEquals(Boolean.TRUE, after.get());
++        assertEquals(Boolean.TRUE, CraftBlockEntityState.DISABLE_SNAPSHOT.get());
++        CraftBlockEntityState.DISABLE_SNAPSHOT.remove();
++    }
++}

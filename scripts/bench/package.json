@@ -1,0 +1,8 @@
+{
+  "name": "pewpew-bench-bots",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "mineflayer": "^4.18.0"
+  }
+}

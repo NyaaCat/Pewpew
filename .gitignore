@@ -30,7 +30,9 @@ replay_pid*
 out/
 .fleet/
 .vscode/
+.claude/
 .classpath
+.gradle-user/
 .project
 .settings/
 nbproject/
@@ -60,6 +62,7 @@ run/
 logs/
 
 # Repo-specific
+node_modules/
 tmp/
 test-plugin.settings.gradle.kts
 paper-generator.settings.gradle.kts

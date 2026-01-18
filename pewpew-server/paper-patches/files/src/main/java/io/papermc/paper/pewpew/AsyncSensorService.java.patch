@@ -1,0 +1,337 @@
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/pewpew/AsyncSensorService.java
+@@ -1,0 +_,334 @@
++package io.papermc.paper.pewpew;
++
++import java.util.ArrayList;
++import java.util.Comparator;
++import java.util.List;
++import java.util.UUID;
++import java.util.concurrent.RejectedExecutionException;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.logging.Level;
++import java.util.logging.Logger;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.LivingEntity;
++import net.minecraft.world.entity.ai.Brain;
++import net.minecraft.world.entity.ai.memory.MemoryModuleType;
++import net.minecraft.world.entity.ai.memory.NearestVisibleLivingEntities;
++import net.minecraft.world.entity.ai.sensing.Sensor;
++import net.minecraft.world.entity.player.Player;
++
++public final class AsyncSensorService {
++    private static final Logger LOGGER = Logger.getLogger(AsyncSensorService.class.getName());
++    private static final String ENABLE_PROPERTY = "pewpew.asyncSensors";
++    private static final AsyncSensorService INSTANCE = new AsyncSensorService();
++
++    private final java.util.concurrent.ConcurrentHashMap<UUID, PendingLivingTask> pendingLiving = new java.util.concurrent.ConcurrentHashMap<>();
++    private final java.util.concurrent.ConcurrentHashMap<UUID, PendingPlayerTask> pendingPlayers = new java.util.concurrent.ConcurrentHashMap<>();
++    private final AtomicBoolean initialized = new AtomicBoolean();
++    private volatile ThreadPoolExecutor executor;
++
++    private AsyncSensorService() {
++    }
++
++    public static boolean isEnabled() {
++        return Boolean.getBoolean(ENABLE_PROPERTY);
++    }
++
++    public static void invalidateWorld(final String worldName) {
++        INSTANCE.pendingLiving.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
++        INSTANCE.pendingPlayers.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
++    }
++
++    public static boolean scheduleNearestLivingEntities(
++        final ServerLevel level,
++        final LivingEntity owner,
++        final List<LivingEntity> candidates,
++        final double followRange
++    ) {
++        return INSTANCE.scheduleLiving(level, owner, candidates, followRange);
++    }
++
++    public static boolean scheduleNearestPlayers(
++        final ServerLevel level,
++        final LivingEntity owner,
++        final List<Player> candidates,
++        final double followRange
++    ) {
++        return INSTANCE.schedulePlayers(level, owner, candidates, followRange);
++    }
++
++    private boolean scheduleLiving(
++        final ServerLevel level,
++        final LivingEntity owner,
++        final List<LivingEntity> candidates,
++        final double followRange
++    ) {
++        if (!isEnabled() || candidates.isEmpty()) {
++            return false;
++        }
++        init();
++        final UUID ownerId = owner.getUUID();
++        final List<EntitySnapshot> snapshots = new ArrayList<>(candidates.size());
++        for (LivingEntity candidate : candidates) {
++            snapshots.add(EntitySnapshot.from(candidate));
++        }
++        final PendingLivingTask task = new PendingLivingTask(
++            level,
++            ownerId,
++            owner.blockPosition(),
++            owner.getX(),
++            owner.getY(),
++            owner.getZ(),
++            snapshots,
++            followRange,
++            WorldTickCoordinator.get().currentGeneration(level.getWorld().getName())
++        );
++        if (this.pendingLiving.putIfAbsent(ownerId, task) != null) {
++            return true;
++        }
++        try {
++            this.executor.execute(task::runAsync);
++        } catch (RejectedExecutionException ex) {
++            this.pendingLiving.remove(ownerId, task);
++            return false;
++        }
++        return true;
++    }
++
++    private boolean schedulePlayers(
++        final ServerLevel level,
++        final LivingEntity owner,
++        final List<Player> candidates,
++        final double followRange
++    ) {
++        if (!isEnabled() || candidates.isEmpty()) {
++            return false;
++        }
++        init();
++        final UUID ownerId = owner.getUUID();
++        final List<EntitySnapshot> snapshots = new ArrayList<>(candidates.size());
++        for (Player candidate : candidates) {
++            snapshots.add(EntitySnapshot.from(candidate));
++        }
++        final PendingPlayerTask task = new PendingPlayerTask(
++            level,
++            ownerId,
++            owner.blockPosition(),
++            owner.getX(),
++            owner.getY(),
++            owner.getZ(),
++            snapshots,
++            followRange,
++            WorldTickCoordinator.get().currentGeneration(level.getWorld().getName())
++        );
++        if (this.pendingPlayers.putIfAbsent(ownerId, task) != null) {
++            return true;
++        }
++        try {
++            this.executor.execute(task::runAsync);
++        } catch (RejectedExecutionException ex) {
++            this.pendingPlayers.remove(ownerId, task);
++            return false;
++        }
++        return true;
++    }
++
++    private void init() {
++        if (!this.initialized.compareAndSet(false, true)) {
++            return;
++        }
++        this.executor = (ThreadPoolExecutor)PewpewAsyncPool.get();
++    }
++
++    private static final class EntitySnapshot {
++        private final UUID id;
++        private final double x;
++        private final double y;
++        private final double z;
++
++        private EntitySnapshot(UUID id, double x, double y, double z) {
++            this.id = id;
++            this.x = x;
++            this.y = y;
++            this.z = z;
++        }
++
++        private static EntitySnapshot from(Entity entity) {
++            return new EntitySnapshot(entity.getUUID(), entity.getX(), entity.getY(), entity.getZ());
++        }
++    }
++
++    private abstract static class PendingTask {
++        protected final ServerLevel level;
++        protected final String worldName;
++        protected final UUID ownerId;
++        protected final net.minecraft.core.BlockPos originPos;
++        protected final List<EntitySnapshot> candidates;
++        protected final double originX;
++        protected final double originY;
++        protected final double originZ;
++        protected final double followRange;
++        protected final long generationId;
++
++        protected PendingTask(
++            ServerLevel level,
++            UUID ownerId,
++            net.minecraft.core.BlockPos originPos,
++            double originX,
++            double originY,
++            double originZ,
++            List<EntitySnapshot> candidates,
++            double followRange,
++            long generationId
++        ) {
++            this.level = level;
++            this.worldName = level.getWorld().getName();
++            this.ownerId = ownerId;
++            this.originPos = originPos;
++            this.originX = originX;
++            this.originY = originY;
++            this.originZ = originZ;
++            this.candidates = candidates;
++            this.followRange = followRange;
++            this.generationId = generationId;
++        }
++
++        protected List<UUID> sortedCandidateIds() {
++            List<EntityDistance> distances = new ArrayList<>(this.candidates.size());
++            for (EntitySnapshot snapshot : this.candidates) {
++                double dx = snapshot.x - this.originX;
++                double dy = snapshot.y - this.originY;
++                double dz = snapshot.z - this.originZ;
++                distances.add(new EntityDistance(snapshot.id, dx * dx + dy * dy + dz * dz));
++            }
++            distances.sort(Comparator.comparingDouble(EntityDistance::distanceSq));
++            List<UUID> ids = new ArrayList<>(distances.size());
++            for (EntityDistance distance : distances) {
++                ids.add(distance.id);
++            }
++            return ids;
++        }
++
++        protected record EntityDistance(UUID id, double distanceSq) {
++        }
++    }
++
++    private final class PendingLivingTask extends PendingTask {
++        private PendingLivingTask(
++            ServerLevel level,
++            UUID ownerId,
++            net.minecraft.core.BlockPos originPos,
++            double originX,
++            double originY,
++            double originZ,
++            List<EntitySnapshot> candidates,
++            double followRange,
++            long generationId
++        ) {
++            super(level, ownerId, originPos, originX, originY, originZ, candidates, followRange, generationId);
++        }
++
++        private void runAsync() {
++            List<UUID> sortedIds;
++            try {
++                sortedIds = sortedCandidateIds();
++            } catch (Throwable throwable) {
++                LOGGER.log(Level.WARNING, "Async living sensor failed", throwable);
++                AsyncSensorService.this.pendingLiving.remove(this.ownerId, this);
++                return;
++            }
++            WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> apply(sortedIds));
++        }
++
++        private void apply(List<UUID> sortedIds) {
++            AsyncSensorService.this.pendingLiving.remove(this.ownerId, this);
++            Entity entity = this.level.getEntity(this.ownerId);
++            if (!(entity instanceof LivingEntity owner) || !owner.isAlive()) {
++                return;
++            }
++            if (!owner.blockPosition().closerThan(this.originPos, 4.0)) {
++                return;
++            }
++            final double maxDistanceSq = this.followRange * this.followRange;
++            List<LivingEntity> resolved = new ArrayList<>(sortedIds.size());
++            for (UUID id : sortedIds) {
++                Entity candidate = this.level.getEntity(id);
++                if (candidate instanceof LivingEntity living && living.isAlive() && candidate != owner) {
++                    if (owner.distanceToSqr(living) <= maxDistanceSq) {
++                        resolved.add(living);
++                    }
++                }
++            }
++            Brain<?> brain = owner.getBrain();
++            brain.setMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES, resolved);
++            brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_LIVING_ENTITIES, new NearestVisibleLivingEntities(this.level, owner, resolved));
++        }
++    }
++
++    private final class PendingPlayerTask extends PendingTask {
++        private PendingPlayerTask(
++            ServerLevel level,
++            UUID ownerId,
++            net.minecraft.core.BlockPos originPos,
++            double originX,
++            double originY,
++            double originZ,
++            List<EntitySnapshot> candidates,
++            double followRange,
++            long generationId
++        ) {
++            super(level, ownerId, originPos, originX, originY, originZ, candidates, followRange, generationId);
++        }
++
++        private void runAsync() {
++            List<UUID> sortedIds;
++            try {
++                sortedIds = sortedCandidateIds();
++            } catch (Throwable throwable) {
++                LOGGER.log(Level.WARNING, "Async player sensor failed", throwable);
++                AsyncSensorService.this.pendingPlayers.remove(this.ownerId, this);
++                return;
++            }
++            WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> apply(sortedIds));
++        }
++
++        private void apply(List<UUID> sortedIds) {
++            AsyncSensorService.this.pendingPlayers.remove(this.ownerId, this);
++            Entity entity = this.level.getEntity(this.ownerId);
++            if (!(entity instanceof LivingEntity owner) || !owner.isAlive()) {
++                return;
++            }
++            if (!owner.blockPosition().closerThan(this.originPos, 4.0)) {
++                return;
++            }
++            final double maxDistanceSq = this.followRange * this.followRange;
++            List<Player> resolved = new ArrayList<>(sortedIds.size());
++            for (UUID id : sortedIds) {
++                Player player = this.level.getPlayerByUUID(id);
++                if (player != null && player.isAlive()) {
++                    if (owner.distanceToSqr(player) <= maxDistanceSq && net.minecraft.world.entity.EntitySelector.NO_SPECTATORS.test(player)) {
++                        resolved.add(player);
++                    }
++                }
++            }
++            Brain<?> brain = owner.getBrain();
++            brain.setMemory(MemoryModuleType.NEAREST_PLAYERS, resolved);
++            List<Player> visible = new ArrayList<>(resolved.size());
++            for (Player player : resolved) {
++                if (Sensor.isEntityTargetable(this.level, owner, player)) {
++                    visible.add(player);
++                }
++            }
++            brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_PLAYER, visible.isEmpty() ? null : visible.get(0));
++            List<Player> attackable = new ArrayList<>(visible.size());
++            for (Player player : visible) {
++                if (Sensor.isEntityAttackable(this.level, owner, player)) {
++                    attackable.add(player);
++                }
++            }
++            brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_ATTACKABLE_PLAYERS, attackable);
++            brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_ATTACKABLE_PLAYER, attackable.isEmpty() ? null : attackable.get(0));
++        }
++    }
++}

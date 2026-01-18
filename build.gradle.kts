@@ -30,6 +30,7 @@ paperweight {
 }
 
 val paperMavenPublicUrl = "https://repo.papermc.io/repository/maven-public/"
+val junitPlatformVersion = "1.12.2"
 
 subprojects {
     apply(plugin = "java-library")
@@ -47,7 +48,7 @@ subprojects {
     }
 
     dependencies {
-        "testRuntimeOnly"("org.junit.platform:junit-platform-launcher")
+        "testRuntimeOnly"("org.junit.platform:junit-platform-launcher:$junitPlatformVersion")
     }
 
     tasks.withType<AbstractArchiveTask>().configureEach {
@@ -84,4 +85,10 @@ tasks.register("printPewpewVersion") {
     doLast {
         println(project.version)
     }
+}
+
+tasks.register("pewpewCi") {
+    group = "verification"
+    description = "Run Pewpew correctness tests and perf A/B checks."
+    dependsOn(":pewpew-api:check", ":pewpew-server:check", ":pewpew-server:pewpewPerfAB")
 }

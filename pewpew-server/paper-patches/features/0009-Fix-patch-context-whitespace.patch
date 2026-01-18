@@ -1,0 +1,25 @@
+From cbba5f4e2ff870de240de334247724b7e86209aa Mon Sep 17 00:00:00 2001
+From: Phoenix <w@m.ac>
+Date: Sun, 18 Jan 2026 01:36:46 +0900
+Subject: [PATCH] Fix patch context whitespace
+
+---
+ .../sources/net/minecraft/server/MinecraftServer.java.patch     | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/paper-server/patches/sources/net/minecraft/server/MinecraftServer.java.patch b/paper-server/patches/sources/net/minecraft/server/MinecraftServer.java.patch
+index 81cc1e2..d7ae988 100644
+--- a/paper-server/patches/sources/net/minecraft/server/MinecraftServer.java.patch
++++ b/paper-server/patches/sources/net/minecraft/server/MinecraftServer.java.patch
+@@ -105,7 +105,7 @@
+              this.proxy = proxy;
+ @@ -309,7 +_,7 @@
+                  services.profileCache().setExecutor(this);
+-            }
++             }
+  
+ -            this.connection = new ServerConnectionListener(this);
+ +            // this.connection = new ServerConnectionListener(this); // Spigot
+-- 
+2.52.0
+

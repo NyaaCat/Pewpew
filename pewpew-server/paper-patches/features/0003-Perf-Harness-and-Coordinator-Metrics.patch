@@ -1,0 +1,432 @@
+From 91cf2e4b7b602952cc37cc72624d8f595ecdf608 Mon Sep 17 00:00:00 2001
+From: Pewpew <pewpew@nyaa.cat>
+Date: Sat, 17 Jan 2026 23:57:51 +0900
+Subject: [PATCH] Add perf harness and coordinator metrics
+
+---
+ .../paper/pewpew/WorldTickCoordinator.java    | 143 ++++++++++++++++-
+ .../WorldTickCoordinatorMetricsTest.java      |  32 ++++
+ .../pewpew/WorldTickCoordinatorPerfTest.java  |  33 +---
+ .../papermc/paper/pewpew/perf/PerfReport.java | 145 ++++++++++++++++++
+ 4 files changed, 323 insertions(+), 30 deletions(-)
+ create mode 100644 paper-server/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java
+ create mode 100644 paper-server/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index bec0bcc..0138aab 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -1,12 +1,27 @@
+ package io.papermc.paper.pewpew;
+ 
++import java.util.Collections;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import java.util.Objects;
++import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicInteger;
++import java.util.concurrent.atomic.AtomicLong;
++import java.util.concurrent.atomic.LongAdder;
+ 
+ public final class WorldTickCoordinator {
+-    private static final boolean ENABLED = Boolean.getBoolean("pewpew.worldTickCoordinator");
++    private static final String ENABLE_PROPERTY = "pewpew.worldTickCoordinator";
++    private static final String TESTING_PROPERTY = "pewpew.worldTickCoordinator.testing";
++    private static final String STALL_THRESHOLD_PROPERTY = "pewpew.worldTickCoordinator.stallThresholdNanos";
++    private static final long DEFAULT_STALL_THRESHOLD_NANOS = 50_000_000L;
++
+     private static final WorldTickCoordinator INSTANCE = new WorldTickCoordinator();
+ 
+     private final AtomicBoolean initialized = new AtomicBoolean();
++    private final ConcurrentHashMap<String, WorldTickMetrics> metricsByWorld = new ConcurrentHashMap<>();
++    private final LongAdder stallCount = new LongAdder();
++    private final AtomicLong maxStallNanos = new AtomicLong();
+ 
+     private WorldTickCoordinator() {
+     }
+@@ -16,11 +31,15 @@ public final class WorldTickCoordinator {
+     }
+ 
+     public static boolean isEnabled() {
+-        return ENABLED;
++        return Boolean.getBoolean(ENABLE_PROPERTY);
++    }
++
++    private static boolean isActive() {
++        return isEnabled() || Boolean.getBoolean(TESTING_PROPERTY);
+     }
+ 
+     public void init() {
+-        if (!ENABLED) {
++        if (!isEnabled()) {
+             return;
+         }
+         if (!this.initialized.compareAndSet(false, true)) {
+@@ -28,4 +47,122 @@ public final class WorldTickCoordinator {
+         }
+         // Placeholder for future initialization.
+     }
++
++    public long recordWorldTickStart(final String worldName) {
++        if (!isActive()) {
++            return 0L;
++        }
++        final WorldTickMetrics metrics = this.metricsFor(worldName);
++        metrics.tickCount.increment();
++        return System.nanoTime();
++    }
++
++    public void recordWorldTickEnd(final String worldName, final long startNanos) {
++        if (!isActive()) {
++            return;
++        }
++        final long duration = System.nanoTime() - startNanos;
++        this.recordWorldTickDuration(worldName, duration);
++    }
++
++    public void recordWorldTickDuration(final String worldName, final long durationNanos) {
++        if (!isActive()) {
++            return;
++        }
++        final WorldTickMetrics metrics = this.metricsFor(worldName);
++        metrics.totalTickNanos.add(durationNanos);
++        updateMax(metrics.maxTickNanos, durationNanos);
++    }
++
++    public void recordQueueDepth(final String worldName, final int depth) {
++        if (!isActive()) {
++            return;
++        }
++        final WorldTickMetrics metrics = this.metricsFor(worldName);
++        metrics.lastQueueDepth.set(depth);
++        updateMax(metrics.maxQueueDepth, depth);
++    }
++
++    public void recordCoordinatorWait(final long durationNanos) {
++        if (!isActive()) {
++            return;
++        }
++        final long threshold = Long.getLong(STALL_THRESHOLD_PROPERTY, DEFAULT_STALL_THRESHOLD_NANOS);
++        if (durationNanos >= threshold) {
++            this.stallCount.increment();
++            updateMax(this.maxStallNanos, durationNanos);
++        }
++    }
++
++    public WorldTickSnapshot snapshot() {
++        final Map<String, WorldTickStats> worldStats = new LinkedHashMap<>();
++        for (final Map.Entry<String, WorldTickMetrics> entry : this.metricsByWorld.entrySet()) {
++            final WorldTickMetrics metrics = entry.getValue();
++            worldStats.put(entry.getKey(), metrics.snapshot());
++        }
++        return new WorldTickSnapshot(
++            Collections.unmodifiableMap(worldStats),
++            this.stallCount.sum(),
++            this.maxStallNanos.get()
++        );
++    }
++
++    private WorldTickMetrics metricsFor(final String worldName) {
++        Objects.requireNonNull(worldName, "worldName");
++        return this.metricsByWorld.computeIfAbsent(worldName, key -> new WorldTickMetrics());
++    }
++
++    private static void updateMax(final AtomicLong target, final long value) {
++        long prev;
++        do {
++            prev = target.get();
++            if (value <= prev) {
++                return;
++            }
++        } while (!target.compareAndSet(prev, value));
++    }
++
++    private static void updateMax(final AtomicInteger target, final int value) {
++        int prev;
++        do {
++            prev = target.get();
++            if (value <= prev) {
++                return;
++            }
++        } while (!target.compareAndSet(prev, value));
++    }
++
++    private static final class WorldTickMetrics {
++        private final LongAdder tickCount = new LongAdder();
++        private final LongAdder totalTickNanos = new LongAdder();
++        private final AtomicLong maxTickNanos = new AtomicLong();
++        private final AtomicInteger lastQueueDepth = new AtomicInteger();
++        private final AtomicInteger maxQueueDepth = new AtomicInteger();
++
++        private WorldTickStats snapshot() {
++            return new WorldTickStats(
++                this.tickCount.sum(),
++                this.totalTickNanos.sum(),
++                this.maxTickNanos.get(),
++                this.lastQueueDepth.get(),
++                this.maxQueueDepth.get()
++            );
++        }
++    }
++
++    public record WorldTickStats(
++        long tickCount,
++        long totalTickNanos,
++        long maxTickNanos,
++        int lastQueueDepth,
++        int maxQueueDepth
++    ) {
++    }
++
++    public record WorldTickSnapshot(
++        Map<String, WorldTickStats> worldStats,
++        long stallCount,
++        long maxStallNanos
++    ) {
++    }
+ }
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java
+new file mode 100644
+index 0000000..fa3b382
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java
+@@ -0,0 +1,32 @@
++package io.papermc.paper.pewpew;
++
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertNotNull;
++
++class WorldTickCoordinatorMetricsTest {
++    @Test
++    void recordsTickAndQueueMetrics() {
++        System.setProperty("pewpew.worldTickCoordinator.testing", "true");
++
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        final String worldName = "test_world_metrics";
++        coordinator.recordWorldTickStart(worldName);
++        coordinator.recordWorldTickDuration(worldName, 1_000_000L);
++        coordinator.recordQueueDepth(worldName, 4);
++        coordinator.recordQueueDepth(worldName, 2);
++        coordinator.recordCoordinatorWait(60_000_000L);
++
++        final WorldTickCoordinator.WorldTickSnapshot snapshot = coordinator.snapshot();
++        final WorldTickCoordinator.WorldTickStats stats = snapshot.worldStats().get(worldName);
++        assertNotNull(stats, "missing stats for " + worldName);
++        assertEquals(1L, stats.tickCount());
++        assertEquals(1_000_000L, stats.totalTickNanos());
++        assertEquals(1_000_000L, stats.maxTickNanos());
++        assertEquals(2, stats.lastQueueDepth());
++        assertEquals(4, stats.maxQueueDepth());
++        assertEquals(1L, snapshot.stallCount());
++        assertEquals(60_000_000L, snapshot.maxStallNanos());
++    }
++}
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java
+index 949479a..b753ba4 100644
+--- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java
+@@ -1,10 +1,6 @@
+ package io.papermc.paper.pewpew;
+ 
+-import java.net.URISyntaxException;
+-import java.nio.file.Files;
+-import java.nio.file.Path;
+-import java.nio.file.StandardOpenOption;
+-import java.time.Instant;
++import io.papermc.paper.pewpew.perf.PerfReport;
+ import org.junit.jupiter.api.Test;
+ 
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+@@ -18,30 +14,13 @@ class WorldTickCoordinatorPerfTest {
+             WorldTickCoordinator.get().init();
+         }
+         final long durationNanos = System.nanoTime() - start;
+-        final long nanosPerOp = durationNanos / Math.max(1, iterations);
+ 
+-        final Path root = findRepoRoot();
+-        final Path report = root.resolve("tmp/pewpew/findings/perf-report.md");
+-        Files.createDirectories(report.getParent());
+-        final String line = String.format(
+-            "- %s WorldTickCoordinator.init iterations=%d duration_ns=%d ns_per_op=%d%n",
+-            Instant.now(),
++        final PerfReport.PerfSample sample = PerfReport.sample(
++            "WorldTickCoordinator.init",
+             iterations,
+-            durationNanos,
+-            nanosPerOp
++            durationNanos
+         );
+-        Files.writeString(report, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+-        assertTrue(nanosPerOp > 0);
+-    }
+-
+-    private static Path findRepoRoot() throws URISyntaxException {
+-        Path dir = Path.of(WorldTickCoordinatorPerfTest.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+-        while (dir != null) {
+-            if (Files.exists(dir.resolve("settings.gradle.kts"))) {
+-                return dir;
+-            }
+-            dir = dir.getParent();
+-        }
+-        throw new IllegalStateException("Unable to locate repo root for perf report");
++        PerfReport.handleBaselineOrCompare(sample);
++        assertTrue(sample.nanosPerOp() > 0);
+     }
+ }
+diff --git a/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java b/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java
+new file mode 100644
+index 0000000..d9269d3
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java
+@@ -0,0 +1,145 @@
++package io.papermc.paper.pewpew.perf;
++
++import java.io.IOException;
++import java.io.Reader;
++import java.io.Writer;
++import java.net.URISyntaxException;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.nio.file.StandardOpenOption;
++import java.time.Instant;
++import java.util.Objects;
++import java.util.Properties;
++
++public final class PerfReport {
++    private static final String MODE_PROPERTY = "pewpew.perf.mode";
++    private static final String BASELINE_FILE_PROPERTY = "pewpew.perf.baselineFile";
++    private static final String ALLOWED_REGRESSION_PROPERTY = "pewpew.perf.allowedRegressionPercent";
++
++    private static final String MODE_BASELINE = "baseline";
++    private static final String MODE_COMPARE = "compare";
++
++    private static final double DEFAULT_ALLOWED_REGRESSION_PERCENT = 5.0;
++
++    private PerfReport() {
++    }
++
++    public static PerfSample sample(final String id, final long iterations, final long durationNanos) {
++        final long safeIterations = Math.max(1, iterations);
++        final long nanosPerOp = durationNanos / safeIterations;
++        return new PerfSample(id, safeIterations, durationNanos, nanosPerOp);
++    }
++
++    public static void writeReport(final PerfSample sample, final Long baselineNanosPerOp) throws IOException, URISyntaxException {
++        final Path report = reportFile();
++        Files.createDirectories(report.getParent());
++        final String baselineText = baselineNanosPerOp == null ? "n/a" : baselineNanosPerOp.toString();
++        final String line = String.format(
++            "- %s %s iterations=%d duration_ns=%d ns_per_op=%d baseline_ns_per_op=%s%n",
++            Instant.now(),
++            sample.id(),
++            sample.iterations(),
++            sample.durationNanos(),
++            sample.nanosPerOp(),
++            baselineText
++        );
++        Files.writeString(report, line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
++    }
++
++    public static void handleBaselineOrCompare(final PerfSample sample) throws IOException, URISyntaxException {
++        final String mode = mode();
++        if (MODE_BASELINE.equals(mode)) {
++            writeBaseline(sample);
++            writeReport(sample, sample.nanosPerOp());
++            return;
++        }
++        if (!MODE_COMPARE.equals(mode)) {
++            throw new IllegalStateException("Unknown perf mode: " + mode);
++        }
++        final Long baseline = readBaseline(sample.id());
++        if (baseline == null) {
++            throw new IllegalStateException("Missing baseline for " + sample.id() + "; run with -D" + MODE_PROPERTY + "=baseline on vanilla Paper");
++        }
++        writeReport(sample, baseline);
++        assertNoRegression(sample, baseline);
++    }
++
++    private static String mode() {
++        return System.getProperty(MODE_PROPERTY, MODE_COMPARE).trim();
++    }
++
++    private static void writeBaseline(final PerfSample sample) throws IOException, URISyntaxException {
++        final Properties properties = loadBaselineProperties();
++        properties.setProperty(sample.id(), Long.toString(sample.nanosPerOp()));
++        final Path baseline = baselineFile();
++        Files.createDirectories(baseline.getParent());
++        try (Writer writer = Files.newBufferedWriter(baseline)) {
++            properties.store(writer, "Pewpew perf baselines (ns per op)");
++        }
++    }
++
++    private static Long readBaseline(final String id) throws IOException, URISyntaxException {
++        final Properties properties = loadBaselineProperties();
++        final String value = properties.getProperty(id);
++        if (value == null) {
++            return null;
++        }
++        return Long.parseLong(value.trim());
++    }
++
++    private static Properties loadBaselineProperties() throws IOException, URISyntaxException {
++        final Properties properties = new Properties();
++        final Path baseline = baselineFile();
++        if (!Files.exists(baseline)) {
++            return properties;
++        }
++        try (Reader reader = Files.newBufferedReader(baseline)) {
++            properties.load(reader);
++        }
++        return properties;
++    }
++
++    private static void assertNoRegression(final PerfSample sample, final long baselineNanosPerOp) {
++        final double allowedPercent = Double.parseDouble(System.getProperty(
++            ALLOWED_REGRESSION_PROPERTY,
++            Double.toString(DEFAULT_ALLOWED_REGRESSION_PERCENT)
++        ));
++        final long allowed = Math.round(baselineNanosPerOp * (1.0 + (allowedPercent / 100.0)));
++        if (sample.nanosPerOp() > allowed) {
++            throw new AssertionError(
++                "Perf regression for " + sample.id() + ": baseline=" + baselineNanosPerOp
++                    + " ns/op, current=" + sample.nanosPerOp() + " ns/op, allowed=" + allowed
++                    + " ns/op (" + allowedPercent + "% over baseline)"
++            );
++        }
++    }
++
++    private static Path baselineFile() throws URISyntaxException {
++        final String override = System.getProperty(BASELINE_FILE_PROPERTY);
++        if (override != null && !override.isBlank()) {
++            return Path.of(override);
++        }
++        return repoRoot().resolve("tmp/pewpew/findings/perf-baseline.properties");
++    }
++
++    private static Path reportFile() throws URISyntaxException {
++        return repoRoot().resolve("tmp/pewpew/findings/perf-report.md");
++    }
++
++    private static Path repoRoot() throws URISyntaxException {
++        Path dir = Path.of(PerfReport.class.getProtectionDomain().getCodeSource().getLocation().toURI());
++        while (dir != null) {
++            if (Files.exists(dir.resolve("settings.gradle.kts"))) {
++                return dir;
++            }
++            dir = dir.getParent();
++        }
++        throw new IllegalStateException("Unable to locate repo root for perf report");
++    }
++
++    public record PerfSample(String id, long iterations, long durationNanos, long nanosPerOp) {
++        public PerfSample {
++            Objects.requireNonNull(id, "id");
++        }
++    }
++}
+-- 
+2.52.0
+

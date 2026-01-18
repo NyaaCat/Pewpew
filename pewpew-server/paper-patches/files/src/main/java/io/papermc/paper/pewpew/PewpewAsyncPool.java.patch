@@ -1,0 +1,90 @@
+--- /dev/null
++++ b/src/main/java/io/papermc/paper/pewpew/PewpewAsyncPool.java
+@@ -1,0 +_,87 @@
++package io.papermc.paper.pewpew;
++
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.LinkedBlockingQueue;
++import java.util.concurrent.ThreadFactory;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicInteger;
++
++public final class PewpewAsyncPool {
++    private static final String WORKER_COUNT_PROPERTY = "pewpew.async.workers";
++    private static final String QUEUE_LIMIT_PROPERTY = "pewpew.async.queueLimit";
++    private static final String TESTING_PROPERTY = "pewpew.async.testing";
++    private static final String THREAD_NAME_PREFIX = "Pewpew-Async-";
++    private static final PewpewAsyncPool INSTANCE = new PewpewAsyncPool();
++
++    private final AtomicBoolean initialized = new AtomicBoolean();
++    private final AtomicInteger threadIds = new AtomicInteger();
++    private final Object executorLock = new Object();
++    private volatile ThreadPoolExecutor executor;
++
++    private PewpewAsyncPool() {
++    }
++
++    public static ExecutorService get() {
++        return INSTANCE.ensureExecutor();
++    }
++
++    public static void shutdownForTesting() {
++        INSTANCE.shutdown();
++    }
++
++    private ExecutorService ensureExecutor() {
++        ThreadPoolExecutor current = this.executor;
++        if (current != null) {
++            return current;
++        }
++        synchronized (this.executorLock) {
++            current = this.executor;
++            if (current != null) {
++                return current;
++            }
++            if (!this.initialized.compareAndSet(false, true)) {
++                return this.executor;
++            }
++            current = createExecutor();
++            this.executor = current;
++            return current;
++        }
++    }
++
++    private ThreadPoolExecutor createExecutor() {
++        final int workers = Math.max(1, Integer.getInteger(
++            WORKER_COUNT_PROPERTY,
++            Math.max(1, Runtime.getRuntime().availableProcessors() / 2)
++        ));
++        final int queueLimit = Math.max(256, Integer.getInteger(QUEUE_LIMIT_PROPERTY, 2048));
++        final ThreadFactory factory = runnable -> {
++            final Thread thread = new Thread(runnable, THREAD_NAME_PREFIX + this.threadIds.incrementAndGet());
++            if (Boolean.getBoolean(TESTING_PROPERTY)) {
++                thread.setDaemon(true);
++            }
++            return thread;
++        };
++        final ThreadPoolExecutor pool = new ThreadPoolExecutor(
++            workers,
++            workers,
++            0L,
++            TimeUnit.MILLISECONDS,
++            new LinkedBlockingQueue<>(queueLimit),
++            factory
++        );
++        pool.prestartAllCoreThreads();
++        return pool;
++    }
++
++    private void shutdown() {
++        final ThreadPoolExecutor current = this.executor;
++        if (current == null) {
++            return;
++        }
++        current.shutdownNow();
++        this.executor = null;
++        this.initialized.set(false);
++    }
++}

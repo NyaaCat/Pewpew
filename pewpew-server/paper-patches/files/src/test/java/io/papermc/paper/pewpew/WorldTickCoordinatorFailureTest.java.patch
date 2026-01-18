@@ -1,0 +1,49 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorFailureTest.java
+@@ -1,0 +_,46 @@
++package io.papermc.paper.pewpew;
++
++import java.util.LinkedHashMap;
++import java.util.Map;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertThrows;
++
++@Normal
++class WorldTickCoordinatorFailureTest {
++    @Test
++    void dispatchPropagatesFailure() throws Exception {
++        final String previousEnabled = System.getProperty("pewpew.worldTickCoordinator");
++        final String previousTesting = System.getProperty("pewpew.worldTickCoordinator.testing");
++        final String previousWorkers = System.getProperty("pewpew.worldTickCoordinator.workers");
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        try {
++            System.setProperty("pewpew.worldTickCoordinator", "true");
++            System.setProperty("pewpew.worldTickCoordinator.testing", "true");
++            System.setProperty("pewpew.worldTickCoordinator.workers", "1");
++            coordinator.init();
++
++            final Map<String, Runnable> tasks = new LinkedHashMap<>();
++            tasks.put("world_one", () -> {
++                throw new RuntimeException("boom");
++            });
++
++            final WorldTickCoordinator.TickBarrier barrier = coordinator.dispatchWorldTicks(tasks);
++            assertThrows(RuntimeException.class, barrier::await);
++        } finally {
++            coordinator.shutdownForTesting();
++            restoreProperty("pewpew.worldTickCoordinator", previousEnabled);
++            restoreProperty("pewpew.worldTickCoordinator.testing", previousTesting);
++            restoreProperty("pewpew.worldTickCoordinator.workers", previousWorkers);
++        }
++    }
++
++    private static void restoreProperty(final String key, final String value) {
++        if (value == null) {
++            System.clearProperty(key);
++            return;
++        }
++        System.setProperty(key, value);
++    }
++}

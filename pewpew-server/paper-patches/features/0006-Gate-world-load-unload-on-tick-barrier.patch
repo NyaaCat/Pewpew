@@ -1,0 +1,170 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix <w@m.ac>
+Date: Sun, 18 Jan 2026 01:10:08 +0900
+Subject: [PATCH] Gate world load/unload on tick barrier
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index 558a369cb73192fe6ff9dc50806e799f26b39edb..84ff4b1ad7ff47e69f28f98e66625ba2719f84a1 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -32,6 +32,7 @@ public final class WorldTickCoordinator {
+     private final LongAdder stallCount = new LongAdder();
+     private final AtomicLong maxStallNanos = new AtomicLong();
+     private final AtomicInteger threadIds = new AtomicInteger();
++    private final AtomicReference<TickBarrier> inFlightBarrier = new AtomicReference<>();
+     private final Object executorLock = new Object();
+     private volatile ThreadPoolExecutor executor;
+ 
+@@ -76,6 +77,7 @@ public final class WorldTickCoordinator {
+             return TickBarrier.completed();
+         }
+         final TickBarrier barrier = new TickBarrier(this, worldTasks.size());
++        this.inFlightBarrier.set(barrier);
+         for (final Map.Entry<String, Runnable> entry : worldTasks.entrySet()) {
+             final String worldName = Objects.requireNonNull(entry.getKey(), "worldName");
+             final Runnable task = Objects.requireNonNull(entry.getValue(), "task");
+@@ -89,6 +91,14 @@ public final class WorldTickCoordinator {
+         return barrier;
+     }
+ 
++    public void awaitIdle() {
++        final TickBarrier barrier = this.inFlightBarrier.get();
++        if (barrier == null) {
++            return;
++        }
++        barrier.awaitUninterruptibly();
++    }
++
+     public void shutdownForTesting() {
+         final ThreadPoolExecutor localExecutor = this.executor;
+         if (localExecutor == null) {
+@@ -226,6 +236,10 @@ public final class WorldTickCoordinator {
+         }
+     }
+ 
++    private void clearBarrier(final TickBarrier barrier) {
++        this.inFlightBarrier.compareAndSet(barrier, null);
++    }
++
+     private WorldTickMetrics metricsFor(final String worldName) {
+         Objects.requireNonNull(worldName, "worldName");
+         return this.metricsByWorld.computeIfAbsent(worldName, key -> new WorldTickMetrics());
+@@ -292,6 +306,7 @@ public final class WorldTickCoordinator {
+         private final CountDownLatch latch;
+         private final AtomicReference<Throwable> failure;
+         private final AtomicBoolean waitRecorded;
++        private final AtomicBoolean completed;
+         private final long startNanos;
+ 
+         private TickBarrier() {
+@@ -299,6 +314,7 @@ public final class WorldTickCoordinator {
+             this.latch = new CountDownLatch(0);
+             this.failure = new AtomicReference<>();
+             this.waitRecorded = new AtomicBoolean(true);
++            this.completed = new AtomicBoolean(true);
+             this.startNanos = 0L;
+         }
+ 
+@@ -307,6 +323,7 @@ public final class WorldTickCoordinator {
+             this.latch = new CountDownLatch(taskCount);
+             this.failure = new AtomicReference<>();
+             this.waitRecorded = new AtomicBoolean();
++            this.completed = new AtomicBoolean();
+             this.startNanos = System.nanoTime();
+         }
+ 
+@@ -320,6 +337,23 @@ public final class WorldTickCoordinator {
+             rethrowIfFailed();
+         }
+ 
++        public void awaitUninterruptibly() {
++            boolean interrupted = false;
++            while (true) {
++                try {
++                    this.latch.await();
++                    break;
++                } catch (final InterruptedException ex) {
++                    interrupted = true;
++                }
++            }
++            if (interrupted) {
++                Thread.currentThread().interrupt();
++            }
++            recordWait();
++            rethrowIfFailed();
++        }
++
+         public boolean await(final long timeout, final TimeUnit unit) throws InterruptedException {
+             final boolean done = this.latch.await(timeout, unit);
+             recordWait();
+@@ -335,6 +369,15 @@ public final class WorldTickCoordinator {
+ 
+         private void countDown() {
+             this.latch.countDown();
++            if (this.coordinator == null) {
++                return;
++            }
++            if (this.latch.getCount() != 0) {
++                return;
++            }
++            if (this.completed.compareAndSet(false, true)) {
++                this.coordinator.clearBarrier(this);
++            }
+         }
+ 
+         private void recordWait() {
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+index 1d12a870a2f239bf95df639ef350b38911558199..cff4ff4e58cba00dc15562a310825959816e2e02 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
+@@ -12,6 +12,7 @@ import com.mojang.brigadier.StringReader;
+ import com.mojang.brigadier.exceptions.CommandSyntaxException;
+ import com.mojang.serialization.Dynamic;
+ import com.mojang.serialization.Lifecycle;
++import io.papermc.paper.pewpew.WorldTickCoordinator;
+ import io.papermc.paper.configuration.PaperServerConfiguration;
+ import io.papermc.paper.configuration.ServerConfiguration;
+ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+@@ -1232,6 +1233,7 @@ public final class CraftServer implements Server {
+         Preconditions.checkState(this.console.getAllLevels().iterator().hasNext(), "Cannot create additional worlds on STARTUP");
+         //Preconditions.checkState(!this.console.isIteratingOverLevels, "Cannot create a world while worlds are being ticked"); // Paper - Cat - Temp disable. We'll see how this goes.
+         Preconditions.checkArgument(creator != null, "WorldCreator cannot be null");
++        WorldTickCoordinator.get().awaitIdle();
+ 
+         String name = creator.name();
+         ChunkGenerator chunkGenerator = creator.generator();
+@@ -1430,6 +1432,7 @@ public final class CraftServer implements Server {
+         if (world == null) {
+             return false;
+         }
++        WorldTickCoordinator.get().awaitIdle();
+ 
+         ServerLevel handle = ((CraftWorld) world).getHandle();
+ 
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+index 8e0b30bfac9aaf49404cbba48051935bdfbeed96..db76c74d9a5f7ad70741ba2a0199f0aaf63b159d 100644
+--- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+@@ -30,8 +30,8 @@ class WorldTickCoordinatorThreadPoolTest {
+             tasks.put("world_one", () -> threadNames.put("world_one", Thread.currentThread().getName()));
+             tasks.put("world_two", () -> threadNames.put("world_two", Thread.currentThread().getName()));
+ 
+-            final WorldTickCoordinator.TickBarrier barrier = coordinator.dispatchWorldTicks(tasks);
+-            barrier.await();
++            coordinator.dispatchWorldTicks(tasks);
++            coordinator.awaitIdle();
+ 
+             assertEquals(2, threadNames.size());
+             assertNotEquals(mainThread, threadNames.get("world_one"));
+@@ -60,8 +60,8 @@ class WorldTickCoordinatorThreadPoolTest {
+             final String mainThread = Thread.currentThread().getName();
+             tasks.put("world_one", () -> threadNames.put("world_one", Thread.currentThread().getName()));
+ 
+-            final WorldTickCoordinator.TickBarrier barrier = coordinator.dispatchWorldTicks(tasks);
+-            barrier.await();
++            coordinator.dispatchWorldTicks(tasks);
++            coordinator.awaitIdle();
+ 
+             assertEquals(1, threadNames.size());
+             assertEquals(mainThread, threadNames.get("world_one"));

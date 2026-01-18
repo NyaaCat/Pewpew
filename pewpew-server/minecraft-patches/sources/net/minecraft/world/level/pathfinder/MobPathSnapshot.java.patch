@@ -1,0 +1,146 @@
+--- /dev/null
++++ b/net/minecraft/world/level/pathfinder/MobPathSnapshot.java
+@@ -1,0 +_,143 @@
++package net.minecraft.world.level.pathfinder;
++
++import net.minecraft.core.BlockPos;
++import net.minecraft.world.entity.Mob;
++import net.minecraft.tags.FluidTags;
++import net.minecraft.world.level.material.FluidState;
++import net.minecraft.world.level.material.Fluids;
++import net.minecraft.world.phys.AABB;
++
++public final class MobPathSnapshot {
++    private final BlockPos blockPos;
++    private final double x;
++    private final double y;
++    private final double z;
++    private final int blockY;
++    private final float bbWidth;
++    private final float bbHeight;
++    private final AABB boundingBox;
++    private final float maxUpStep;
++    private final float maxFallDistance;
++    private final boolean onGround;
++    private final boolean inWater;
++    private final boolean canStandOnWater;
++    private final boolean canStandOnLava;
++    private final float[] pathfindingMalus;
++
++    private MobPathSnapshot(
++        final BlockPos blockPos,
++        final double x,
++        final double y,
++        final double z,
++        final int blockY,
++        final float bbWidth,
++        final float bbHeight,
++        final AABB boundingBox,
++        final float maxUpStep,
++        final float maxFallDistance,
++        final boolean onGround,
++        final boolean inWater,
++        final boolean canStandOnWater,
++        final boolean canStandOnLava,
++        final float[] pathfindingMalus
++    ) {
++        this.blockPos = blockPos;
++        this.x = x;
++        this.y = y;
++        this.z = z;
++        this.blockY = blockY;
++        this.bbWidth = bbWidth;
++        this.bbHeight = bbHeight;
++        this.boundingBox = boundingBox;
++        this.maxUpStep = maxUpStep;
++        this.maxFallDistance = maxFallDistance;
++        this.onGround = onGround;
++        this.inWater = inWater;
++        this.canStandOnWater = canStandOnWater;
++        this.canStandOnLava = canStandOnLava;
++        this.pathfindingMalus = pathfindingMalus;
++    }
++
++    public static MobPathSnapshot from(final Mob mob) {
++        final float[] malus = new float[PathType.values().length];
++        for (final PathType type : PathType.values()) {
++            malus[type.ordinal()] = mob.getPathfindingMalus(type);
++        }
++        return new MobPathSnapshot(
++            mob.blockPosition(),
++            mob.getX(),
++            mob.getY(),
++            mob.getZ(),
++            mob.getBlockY(),
++            mob.getBbWidth(),
++            mob.getBbHeight(),
++            mob.getBoundingBox(),
++            mob.maxUpStep(),
++            mob.getMaxFallDistance(),
++            mob.onGround(),
++            mob.isInWater(),
++            mob.canStandOnFluid(Fluids.WATER.defaultFluidState()),
++            mob.canStandOnFluid(Fluids.LAVA.defaultFluidState()),
++            malus
++        );
++    }
++
++    public BlockPos blockPosition() {
++        return this.blockPos;
++    }
++
++    public double getX() {
++        return this.x;
++    }
++
++    public double getY() {
++        return this.y;
++    }
++
++    public double getZ() {
++        return this.z;
++    }
++
++    public int getBlockY() {
++        return this.blockY;
++    }
++
++    public float getBbWidth() {
++        return this.bbWidth;
++    }
++
++    public float getBbHeight() {
++        return this.bbHeight;
++    }
++
++    public AABB getBoundingBox() {
++        return this.boundingBox;
++    }
++
++    public float maxUpStep() {
++        return this.maxUpStep;
++    }
++
++    public float getMaxFallDistance() {
++        return this.maxFallDistance;
++    }
++
++    public boolean onGround() {
++        return this.onGround;
++    }
++
++    public boolean isInWater() {
++        return this.inWater;
++    }
++
++    public boolean canStandOnFluid(final FluidState fluidState) {
++        if (this.canStandOnWater && fluidState.is(FluidTags.WATER)) {
++            return true;
++        }
++        return this.canStandOnLava && fluidState.is(FluidTags.LAVA);
++    }
++
++    public float getPathfindingMalus(final PathType type) {
++        return this.pathfindingMalus[type.ordinal()];
++    }
++}

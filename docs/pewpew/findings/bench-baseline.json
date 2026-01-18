@@ -1,0 +1,10 @@
+{
+  "samples": 61,
+  "avgMspt": 94.53631123999996,
+  "p95Mspt": 130.76090270999998,
+  "avgTps": 12.008679861003916,
+  "avgVillagers": 400.0,
+  "avgHostiles": 400.0,
+  "day": {"samples": 25, "avgMspt": 99.4406351416, "p95Mspt": 114.89662720999999, "avgTps": 11.098402335088906, "avgVillagers": 400.0, "avgHostiles": 400.0},
+  "night": {"samples": 36, "avgMspt": 91.13053075277774, "p95Mspt": 134.71341425999998, "avgTps": 12.640817031778225, "avgVillagers": 400.0, "avgHostiles": 400.0}
+}

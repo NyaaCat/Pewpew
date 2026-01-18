@@ -1,0 +1,273 @@
+--- /dev/null
++++ b/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
+@@ -1,0 +_,270 @@
++package net.minecraft.world.level.pathfinder;
++
++import java.util.List;
++import javax.annotation.Nullable;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.SectionPos;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.level.BlockGetter;
++import net.minecraft.world.level.CollisionGetter;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.entity.BlockEntity;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.border.WorldBorder;
++import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.PalettedContainer;
++import net.minecraft.world.level.material.FluidState;
++import net.minecraft.world.level.material.Fluids;
++import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.shapes.VoxelShape;
++
++public final class SnapshotPathNavigationRegion implements CollisionGetter {
++    private final int minChunkX;
++    private final int minChunkZ;
++    private final int maxChunkX;
++    private final int maxChunkZ;
++    private final int minSectionY;
++    private final int maxSectionY;
++    private final int minY;
++    private final int height;
++    private final SnapshotChunk[][] chunks;
++    private final WorldBorder worldBorder;
++
++    private SnapshotPathNavigationRegion(
++        int minChunkX,
++        int minChunkZ,
++        int maxChunkX,
++        int maxChunkZ,
++        int minSectionY,
++        int maxSectionY,
++        int minY,
++        int height,
++        SnapshotChunk[][] chunks,
++        WorldBorder worldBorder
++    ) {
++        this.minChunkX = minChunkX;
++        this.minChunkZ = minChunkZ;
++        this.maxChunkX = maxChunkX;
++        this.maxChunkZ = maxChunkZ;
++        this.minSectionY = minSectionY;
++        this.maxSectionY = maxSectionY;
++        this.minY = minY;
++        this.height = height;
++        this.chunks = chunks;
++        this.worldBorder = worldBorder;
++    }
++
++    public static SnapshotPathNavigationRegion capture(ServerLevel level, BlockPos minPos, BlockPos maxPos) {
++        int minChunkX = SectionPos.blockToSectionCoord(Math.min(minPos.getX(), maxPos.getX()));
++        int maxChunkX = SectionPos.blockToSectionCoord(Math.max(minPos.getX(), maxPos.getX()));
++        int minChunkZ = SectionPos.blockToSectionCoord(Math.min(minPos.getZ(), maxPos.getZ()));
++        int maxChunkZ = SectionPos.blockToSectionCoord(Math.max(minPos.getZ(), maxPos.getZ()));
++        int minY = level.getMinY();
++        int maxY = level.getMaxY();
++        int minSectionY = SectionPos.blockToSectionCoord(Math.max(Math.min(minPos.getY(), maxPos.getY()), minY));
++        int maxSectionY = SectionPos.blockToSectionCoord(Math.min(Math.max(minPos.getY(), maxPos.getY()), maxY));
++        if (maxSectionY < minSectionY) {
++            minSectionY = level.getMinSectionY();
++            maxSectionY = level.getMaxSectionY();
++        }
++        int chunkCountX = maxChunkX - minChunkX + 1;
++        int chunkCountZ = maxChunkZ - minChunkZ + 1;
++        SnapshotChunk[][] chunks = new SnapshotChunk[chunkCountX][chunkCountZ];
++        int sectionsPerChunk = maxSectionY - minSectionY + 1;
++
++        for (int cx = minChunkX; cx <= maxChunkX; cx++) {
++            for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
++                LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
++                if (chunk == null) {
++                    chunks[cx - minChunkX][cz - minChunkZ] = SnapshotChunk.missing();
++                    continue;
++                }
++                PalettedContainer<BlockState>[] sectionStates = new PalettedContainer[sectionsPerChunk];
++                long[] sectionVersions = new long[sectionsPerChunk];
++                for (int sectionY = minSectionY; sectionY <= maxSectionY; sectionY++) {
++                    int sectionIndex = chunk.getSectionIndexFromSectionY(sectionY);
++                    if (sectionIndex < 0 || sectionIndex >= chunk.getSections().length) {
++                        sectionVersions[sectionY - minSectionY] = -1L;
++                        continue;
++                    }
++                    LevelChunkSection section = chunk.getSection(sectionIndex);
++                    sectionVersions[sectionY - minSectionY] = section.getChangeVersion();
++                    if (!section.hasOnlyAir()) {
++                        sectionStates[sectionY - minSectionY] = section.states.copy();
++                    }
++                }
++                chunks[cx - minChunkX][cz - minChunkZ] = SnapshotChunk.loaded(sectionStates, sectionVersions);
++            }
++        }
++
++        WorldBorder border = new WorldBorder();
++        border.applySettings(level.getWorldBorder().createSettings());
++        return new SnapshotPathNavigationRegion(
++            minChunkX,
++            minChunkZ,
++            maxChunkX,
++            maxChunkZ,
++            minSectionY,
++            maxSectionY,
++            minY,
++            level.getHeight(),
++            chunks,
++            border
++        );
++    }
++
++    public boolean isStillValid(ServerLevel level) {
++        int sectionsPerChunk = this.maxSectionY - this.minSectionY + 1;
++        for (int cx = this.minChunkX; cx <= this.maxChunkX; cx++) {
++            for (int cz = this.minChunkZ; cz <= this.maxChunkZ; cz++) {
++                SnapshotChunk snapshotChunk = this.chunks[cx - this.minChunkX][cz - this.minChunkZ];
++                LevelChunk current = level.getChunkSource().getChunkNow(cx, cz);
++                if (!snapshotChunk.loaded) {
++                    if (current != null) {
++                        return false;
++                    }
++                    continue;
++                }
++                if (current == null) {
++                    return false;
++                }
++                for (int index = 0; index < sectionsPerChunk; index++) {
++                    int sectionY = this.minSectionY + index;
++                    int sectionIndex = current.getSectionIndexFromSectionY(sectionY);
++                    if (sectionIndex < 0 || sectionIndex >= current.getSections().length) {
++                        return false;
++                    }
++                    LevelChunkSection section = current.getSection(sectionIndex);
++                    if (section.getChangeVersion() != snapshotChunk.sectionVersions[index]) {
++                        return false;
++                    }
++                }
++            }
++        }
++        return true;
++    }
++
++    @Nullable
++    private SnapshotChunk getChunk(int chunkX, int chunkZ) {
++        int x = chunkX - this.minChunkX;
++        int z = chunkZ - this.minChunkZ;
++        if (x < 0 || x >= this.chunks.length) {
++            return null;
++        }
++        if (z < 0 || z >= this.chunks[x].length) {
++            return null;
++        }
++        return this.chunks[x][z];
++    }
++
++    @Override
++    public WorldBorder getWorldBorder() {
++        return this.worldBorder;
++    }
++
++    @Override
++    public BlockGetter getChunkForCollisions(int chunkX, int chunkZ) {
++        return this;
++    }
++
++    @Override
++    public List<VoxelShape> getEntityCollisions(@Nullable Entity entity, AABB collisionBox) {
++        return List.of();
++    }
++
++    @Nullable
++    @Override
++    public BlockEntity getBlockEntity(BlockPos pos) {
++        return null;
++    }
++
++    @Override
++    public BlockState getBlockState(BlockPos pos) {
++        if (this.isOutsideBuildHeight(pos)) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        SnapshotChunk chunk = this.getChunk(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()));
++        if (chunk == null || !chunk.loaded) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        int sectionY = SectionPos.blockToSectionCoord(pos.getY());
++        if (sectionY < this.minSectionY || sectionY > this.maxSectionY) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        PalettedContainer<BlockState> states = chunk.sectionStates[sectionY - this.minSectionY];
++        if (states == null) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        return states.get(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15);
++    }
++
++    @Nullable
++    @Override
++    public BlockState getBlockStateIfLoaded(BlockPos pos) {
++        if (this.isOutsideBuildHeight(pos)) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        SnapshotChunk chunk = this.getChunk(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()));
++        if (chunk == null || !chunk.loaded) {
++            return null;
++        }
++        int sectionY = SectionPos.blockToSectionCoord(pos.getY());
++        if (sectionY < this.minSectionY || sectionY > this.maxSectionY) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        PalettedContainer<BlockState> states = chunk.sectionStates[sectionY - this.minSectionY];
++        if (states == null) {
++            return Blocks.AIR.defaultBlockState();
++        }
++        return states.get(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15);
++    }
++
++    @Nullable
++    @Override
++    public FluidState getFluidIfLoaded(BlockPos pos) {
++        BlockState state = this.getBlockStateIfLoaded(pos);
++        return state == null ? null : state.getFluidState();
++    }
++
++    @Override
++    public FluidState getFluidState(BlockPos pos) {
++        if (this.isOutsideBuildHeight(pos)) {
++            return Fluids.EMPTY.defaultFluidState();
++        }
++        return this.getBlockState(pos).getFluidState();
++    }
++
++    @Override
++    public int getMinY() {
++        return this.minY;
++    }
++
++    @Override
++    public int getHeight() {
++        return this.height;
++    }
++
++    private static final class SnapshotChunk {
++        private static final SnapshotChunk MISSING = new SnapshotChunk(false, new PalettedContainer[0], new long[0]);
++
++        private final boolean loaded;
++        private final PalettedContainer<BlockState>[] sectionStates;
++        private final long[] sectionVersions;
++
++        private SnapshotChunk(boolean loaded, PalettedContainer<BlockState>[] sectionStates, long[] sectionVersions) {
++            this.loaded = loaded;
++            this.sectionStates = sectionStates;
++            this.sectionVersions = sectionVersions;
++        }
++
++        private static SnapshotChunk missing() {
++            return MISSING;
++        }
++
++        private static SnapshotChunk loaded(PalettedContainer<BlockState>[] sectionStates, long[] sectionVersions) {
++            return new SnapshotChunk(true, sectionStates, sectionVersions);
++        }
++    }
++}

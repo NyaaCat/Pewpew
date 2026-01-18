@@ -1,0 +1,114 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
+@@ -1,0 +_,111 @@
++package io.papermc.paper.pewpew;
++
++import static org.junit.jupiter.api.Assertions.assertFalse;
++import static org.junit.jupiter.api.Assertions.assertSame;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++import static org.mockito.Mockito.mock;
++import static org.mockito.Mockito.when;
++
++import com.mojang.serialization.Lifecycle;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.MappedRegistry;
++import net.minecraft.core.RegistrationInfo;
++import net.minecraft.core.registries.Registries;
++import net.minecraft.server.level.ServerChunkCache;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.level.border.WorldBorder;
++import net.minecraft.world.level.biome.Biome;
++import net.minecraft.world.level.biome.BiomeGenerationSettings;
++import net.minecraft.world.level.biome.BiomeSpecialEffects;
++import net.minecraft.world.level.biome.Biomes;
++import net.minecraft.world.level.biome.MobSpawnSettings;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.pathfinder.SnapshotPathNavigationRegion;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++@Normal
++class SnapshotPathNavigationRegionTest {
++    @Test
++    void snapshotDetectsSectionChanges() {
++        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
++        section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
++
++        LevelChunk chunk = mockChunk(section);
++        ServerLevel level = mockLevel(chunk);
++
++        SnapshotPathNavigationRegion region = SnapshotPathNavigationRegion.capture(
++            level,
++            new BlockPos(0, 0, 0),
++            new BlockPos(15, 15, 15)
++        );
++
++        assertTrue(region.isStillValid(level));
++
++        section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
++        assertFalse(region.isStillValid(level));
++    }
++
++    @Test
++    void snapshotUsesCopiedStates() {
++        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
++        section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
++
++        LevelChunk chunk = mockChunk(section);
++        ServerLevel level = mockLevel(chunk);
++
++        SnapshotPathNavigationRegion region = SnapshotPathNavigationRegion.capture(
++            level,
++            new BlockPos(0, 0, 0),
++            new BlockPos(15, 15, 15)
++        );
++
++        assertSame(Blocks.DIRT.defaultBlockState(), region.getBlockState(BlockPos.ZERO));
++
++        section.setBlockState(0, 0, 0, Blocks.STONE.defaultBlockState());
++        assertSame(Blocks.DIRT.defaultBlockState(), region.getBlockState(BlockPos.ZERO));
++    }
++
++    private static LevelChunk mockChunk(LevelChunkSection section) {
++        LevelChunk chunk = mock(LevelChunk.class);
++        when(chunk.getSectionIndexFromSectionY(0)).thenReturn(0);
++        when(chunk.getSections()).thenReturn(new LevelChunkSection[] { section });
++        when(chunk.getSection(0)).thenReturn(section);
++        return chunk;
++    }
++
++    private static ServerLevel mockLevel(LevelChunk chunk) {
++        ServerLevel level = mock(ServerLevel.class);
++        ServerChunkCache chunkSource = mock(ServerChunkCache.class);
++        when(level.getChunkSource()).thenReturn(chunkSource);
++        when(chunkSource.getChunkNow(0, 0)).thenReturn(chunk);
++        when(level.getMinY()).thenReturn(0);
++        when(level.getMaxY()).thenReturn(16);
++        when(level.getMinSectionY()).thenReturn(0);
++        when(level.getMaxSectionY()).thenReturn(0);
++        when(level.getHeight()).thenReturn(16);
++        when(level.getWorldBorder()).thenReturn(new WorldBorder());
++        return level;
++    }
++
++    private static MappedRegistry<Biome> buildTestBiomeRegistry() {
++        MappedRegistry<Biome> registry = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
++        BiomeSpecialEffects effects = new BiomeSpecialEffects.Builder()
++            .fogColor(0)
++            .waterColor(0)
++            .waterFogColor(0)
++            .skyColor(0)
++            .build();
++        Biome biome = new Biome.BiomeBuilder()
++            .temperature(0.8F)
++            .downfall(0.4F)
++            .specialEffects(effects)
++            .mobSpawnSettings(MobSpawnSettings.EMPTY)
++            .generationSettings(BiomeGenerationSettings.EMPTY)
++            .build();
++        registry.register(Biomes.PLAINS, biome, RegistrationInfo.BUILT_IN);
++        return registry;
++    }
++}

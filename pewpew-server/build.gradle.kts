@@ -120,16 +120,27 @@ if (project.providers.gradleProperty("publishDevBundle").isPresent) {
 
 sourceSets {
     main {
-        java { srcDir("../paper-server/src/main/java"); srcDir("../paper-server/src/generated/java") }
-        resources { srcDir("../paper-server/src/main/resources") }
+        java {
+            srcDir("../paper-server/src/main/java")
+            srcDir("../paper-server/src/generated/java")
+        }
+        resources {
+            srcDir("../paper-server/src/main/resources")
+        }
     }
     test {
-        java { srcDir("../paper-server/src/test/java") }
-        resources { srcDir("../paper-server/src/test/resources") }
+        java {
+            srcDir("../paper-server/src/test/java")
+        }
+        resources {
+            srcDir("../paper-server/src/test/resources")
+        }
     }
 }
 val log4jPlugins = sourceSets.create("log4jPlugins") {
-    java { srcDir("../paper-server/src/log4jPlugins/java") }
+    java {
+        srcDir("../paper-server/src/log4jPlugins/java")
+    }
 }
 configurations.named(log4jPlugins.compileClasspathConfigurationName) {
     extendsFrom(configurations.compileClasspath.get())
@@ -287,6 +298,50 @@ tasks.test {
     val provider = objects.newInstance<MockitoAgentProvider>()
     provider.fileCollection.from(mockitoAgent)
     jvmArgumentProviders.add(provider)
+}
+
+val perfBaselineFile = rootProject.layout.projectDirectory
+    .file("docs/pewpew/findings/perf-baseline.properties").asFile
+val perfReportFile = rootProject.layout.projectDirectory
+    .file("docs/pewpew/findings/perf-report.md").asFile
+
+fun Test.configurePerfTask(mode: String, includePewpewOnly: Boolean) {
+    group = "verification"
+    workingDir = temporaryDir
+    forkEvery = 1
+    maxParallelForks = 1
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform {
+        includeTags("PewpewPerf")
+        if (!includePewpewOnly) {
+            excludeTags("PewpewOnly")
+        }
+    }
+    systemProperty("pewpew.perf.mode", mode)
+    systemProperty("pewpew.perf.baselineFile", perfBaselineFile.absolutePath)
+    systemProperty("pewpew.perf.reportFile", perfReportFile.absolutePath)
+
+    val provider = objects.newInstance<MockitoAgentProvider>()
+    provider.fileCollection.from(mockitoAgent)
+    jvmArgumentProviders.add(provider)
+}
+
+val pewpewPerfBaseline by tasks.registering(Test::class) {
+    description = "Run Pewpew perf baseline tests (common only)."
+    configurePerfTask("baseline", includePewpewOnly = false)
+}
+
+val pewpewPerfCompare by tasks.registering(Test::class) {
+    description = "Run Pewpew perf compare tests (common + Pewpew-only)."
+    configurePerfTask("compare", includePewpewOnly = true)
+    mustRunAfter(pewpewPerfBaseline)
+}
+
+tasks.register("pewpewPerfAB") {
+    group = "verification"
+    description = "Run perf baseline then compare (A/B)."
+    dependsOn(pewpewPerfBaseline, pewpewPerfCompare)
 }
 
 val generatedDir: java.nio.file.Path = layout.projectDirectory.dir("src/generated/java").asFile.toPath()

@@ -1,0 +1,148 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix <w@m.ac>
+Date: Sun, 18 Jan 2026 00:45:50 +0900
+Subject: [PATCH] Add perf test tagging and baseline loop
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java
+index fa3b3820d0d2d6bc1ce5ffc093a36c2ed08910e9..959236a042e82bb1aa5c52de510db549905e9cf2 100644
+--- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorMetricsTest.java
+@@ -1,10 +1,12 @@
+ package io.papermc.paper.pewpew;
+ 
++import org.bukkit.support.environment.Normal;
+ import org.junit.jupiter.api.Test;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertNotNull;
+ 
++@Normal
+ class WorldTickCoordinatorMetricsTest {
+     @Test
+     void recordsTickAndQueueMetrics() {
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java
+index b753ba41c11a61a7a0cc688b18124dbaff265617..3d87b7f9198cad484845990dc62a8acce4e18213 100644
+--- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorPerfTest.java
+@@ -1,10 +1,13 @@
+ package io.papermc.paper.pewpew;
+ 
+ import io.papermc.paper.pewpew.perf.PerfReport;
++import org.junit.jupiter.api.Tag;
+ import org.junit.jupiter.api.Test;
+ 
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
++@Tag("PewpewPerf")
++@Tag("PewpewOnly")
+ class WorldTickCoordinatorPerfTest {
+     @Test
+     void initPerfReport() throws Exception {
+@@ -20,7 +23,7 @@ class WorldTickCoordinatorPerfTest {
+             iterations,
+             durationNanos
+         );
+-        PerfReport.handleBaselineOrCompare(sample);
++        PerfReport.handleBaselineOrCompare(sample, false);
+         assertTrue(sample.nanosPerOp() > 0);
+     }
+ }
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorTest.java
+index 65c5848a5506f0d1bd239348e4d63e0b60fca9ea..f2b91f85464d599e94a29c837d5cd95a8795c955 100644
+--- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorTest.java
+@@ -1,10 +1,12 @@
+ package io.papermc.paper.pewpew;
+ 
++import org.bukkit.support.environment.Normal;
+ import org.junit.jupiter.api.Test;
+ 
+ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ 
++@Normal
+ class WorldTickCoordinatorTest {
+     @Test
+     void enabledFlagMatchesSystemProperty() {
+diff --git a/src/test/java/io/papermc/paper/pewpew/perf/BaselineLoopPerfTest.java b/src/test/java/io/papermc/paper/pewpew/perf/BaselineLoopPerfTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..581002dfb719b1b434e82d9854bfe76d4e246024
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/perf/BaselineLoopPerfTest.java
+@@ -0,0 +1,28 @@
++package io.papermc.paper.pewpew.perf;
++
++import org.junit.jupiter.api.Tag;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++@Tag("PewpewPerf")
++class BaselineLoopPerfTest {
++    @Test
++    void baselineLoop() throws Exception {
++        final int iterations = 1_000_000;
++        long value = 0L;
++        final long start = System.nanoTime();
++        for (int i = 0; i < iterations; i++) {
++            value += (long) i * 31L;
++        }
++        final long durationNanos = System.nanoTime() - start;
++
++        final PerfReport.PerfSample sample = PerfReport.sample(
++            "BaselineLoop",
++            iterations,
++            durationNanos
++        );
++        PerfReport.handleBaselineOrCompare(sample);
++        assertTrue(value > 0L);
++    }
++}
+diff --git a/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java b/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java
+index d9269d3dbea5aaece70eaeadb8f9188746bd3819..7cedd72ef32fe3e52928cf908c5aaafcd571d161 100644
+--- a/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java
++++ b/src/test/java/io/papermc/paper/pewpew/perf/PerfReport.java
+@@ -14,6 +14,7 @@ import java.util.Properties;
+ public final class PerfReport {
+     private static final String MODE_PROPERTY = "pewpew.perf.mode";
+     private static final String BASELINE_FILE_PROPERTY = "pewpew.perf.baselineFile";
++    private static final String REPORT_FILE_PROPERTY = "pewpew.perf.reportFile";
+     private static final String ALLOWED_REGRESSION_PROPERTY = "pewpew.perf.allowedRegressionPercent";
+ 
+     private static final String MODE_BASELINE = "baseline";
+@@ -47,6 +48,10 @@ public final class PerfReport {
+     }
+ 
+     public static void handleBaselineOrCompare(final PerfSample sample) throws IOException, URISyntaxException {
++        handleBaselineOrCompare(sample, true);
++    }
++
++    public static void handleBaselineOrCompare(final PerfSample sample, final boolean requireBaseline) throws IOException, URISyntaxException {
+         final String mode = mode();
+         if (MODE_BASELINE.equals(mode)) {
+             writeBaseline(sample);
+@@ -58,7 +63,11 @@ public final class PerfReport {
+         }
+         final Long baseline = readBaseline(sample.id());
+         if (baseline == null) {
+-            throw new IllegalStateException("Missing baseline for " + sample.id() + "; run with -D" + MODE_PROPERTY + "=baseline on vanilla Paper");
++            if (requireBaseline) {
++                throw new IllegalStateException("Missing baseline for " + sample.id() + "; run with -D" + MODE_PROPERTY + "=baseline on vanilla Paper");
++            }
++            writeReport(sample, null);
++            return;
+         }
+         writeReport(sample, baseline);
+         assertNoRegression(sample, baseline);
+@@ -123,6 +132,10 @@ public final class PerfReport {
+     }
+ 
+     private static Path reportFile() throws URISyntaxException {
++        final String override = System.getProperty(REPORT_FILE_PROPERTY);
++        if (override != null && !override.isBlank()) {
++            return Path.of(override);
++        }
+         return repoRoot().resolve("tmp/pewpew/findings/perf-report.md");
+     }
+ 

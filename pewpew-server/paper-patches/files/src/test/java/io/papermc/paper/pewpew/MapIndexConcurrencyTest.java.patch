@@ -1,0 +1,51 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/MapIndexConcurrencyTest.java
+@@ -1,0 +_,48 @@
++package io.papermc.paper.pewpew;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.concurrent.ConcurrentSkipListSet;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++import java.util.concurrent.Future;
++import net.minecraft.world.level.saveddata.maps.MapId;
++import net.minecraft.world.level.saveddata.maps.MapIndex;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++@Normal
++class MapIndexConcurrencyTest {
++    @Test
++    void getNextMapIdIsUniqueUnderConcurrency() throws Exception {
++        MapIndex index = new MapIndex();
++        int threads = 8;
++        int perThread = 500;
++        ExecutorService executor = Executors.newFixedThreadPool(threads);
++        ConcurrentSkipListSet<Integer> ids = new ConcurrentSkipListSet<>();
++        List<Future<?>> futures = new ArrayList<>();
++
++        try {
++            for (int t = 0; t < threads; t++) {
++                futures.add(executor.submit(() -> {
++                    for (int i = 0; i < perThread; i++) {
++                        MapId id = index.getNextMapId();
++                        ids.add(id.id());
++                    }
++                }));
++            }
++
++            for (Future<?> future : futures) {
++                future.get();
++            }
++        } finally {
++            executor.shutdownNow();
++        }
++
++        assertEquals(threads * perThread, ids.size());
++        assertEquals(0, ids.first().intValue());
++        assertEquals(threads * perThread - 1, ids.last().intValue());
++    }
++}

@@ -1,0 +1,131 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix <w@m.ac>
+Date: Sun, 18 Jan 2026 01:31:23 +0900
+Subject: [PATCH] Parallelize world tick dispatch via coordinator
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorDispatchPerfTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorDispatchPerfTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ab721f795dd4490f4096d83802d41c536cfe0f5f
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorDispatchPerfTest.java
+@@ -0,0 +1,60 @@
++package io.papermc.paper.pewpew;
++
++import io.papermc.paper.pewpew.perf.PerfReport;
++import java.util.LinkedHashMap;
++import java.util.Map;
++import org.junit.jupiter.api.Tag;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++@Tag("PewpewPerf")
++@Tag("PewpewOnly")
++class WorldTickCoordinatorDispatchPerfTest {
++    @Test
++    void dispatchPerf() throws Exception {
++        final String previousEnabled = System.getProperty("pewpew.worldTickCoordinator");
++        final String previousTesting = System.getProperty("pewpew.worldTickCoordinator.testing");
++        final String previousWorkers = System.getProperty("pewpew.worldTickCoordinator.workers");
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        try {
++            System.setProperty("pewpew.worldTickCoordinator", "true");
++            System.setProperty("pewpew.worldTickCoordinator.testing", "true");
++            System.setProperty("pewpew.worldTickCoordinator.workers", "2");
++            coordinator.init();
++
++            final Map<String, Runnable> tasks = new LinkedHashMap<>();
++            tasks.put("dispatch_perf_world_one", () -> {});
++            tasks.put("dispatch_perf_world_two", () -> {});
++
++            final int iterations = 10_000;
++            final long start = System.nanoTime();
++            for (int i = 0; i < iterations; i++) {
++                final WorldTickCoordinator.TickBarrier barrier = coordinator.dispatchWorldTicks(tasks);
++                barrier.await();
++            }
++            final long durationNanos = System.nanoTime() - start;
++
++            final PerfReport.PerfSample sample = PerfReport.sample(
++                "WorldTickCoordinator.dispatch",
++                iterations,
++                durationNanos
++            );
++            PerfReport.handleBaselineOrCompare(sample, false);
++            assertTrue(sample.nanosPerOp() > 0L);
++        } finally {
++            coordinator.shutdownForTesting();
++            restoreProperty("pewpew.worldTickCoordinator", previousEnabled);
++            restoreProperty("pewpew.worldTickCoordinator.testing", previousTesting);
++            restoreProperty("pewpew.worldTickCoordinator.workers", previousWorkers);
++        }
++    }
++
++    private static void restoreProperty(final String key, final String value) {
++        if (value == null) {
++            System.clearProperty(key);
++            return;
++        }
++        System.setProperty(key, value);
++    }
++}
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorDispatchTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorDispatchTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..dcd2038d6a61213df463fb351e2fafafae64cda4
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorDispatchTest.java
+@@ -0,0 +1,53 @@
++package io.papermc.paper.pewpew;
++
++import java.util.LinkedHashMap;
++import java.util.Map;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertNotNull;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++@Normal
++class WorldTickCoordinatorDispatchTest {
++    @Test
++    void dispatchRecordsMetrics() throws Exception {
++        final String previousEnabled = System.getProperty("pewpew.worldTickCoordinator");
++        final String previousTesting = System.getProperty("pewpew.worldTickCoordinator.testing");
++        final String previousWorkers = System.getProperty("pewpew.worldTickCoordinator.workers");
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        try {
++            System.setProperty("pewpew.worldTickCoordinator", "true");
++            System.setProperty("pewpew.worldTickCoordinator.testing", "true");
++            System.setProperty("pewpew.worldTickCoordinator.workers", "1");
++            coordinator.init();
++
++            final Map<String, Runnable> tasks = new LinkedHashMap<>();
++            final String worldName = "dispatch_metrics_world";
++            tasks.put(worldName, () -> {});
++
++            final WorldTickCoordinator.TickBarrier barrier = coordinator.dispatchWorldTicks(tasks);
++            barrier.await();
++
++            final WorldTickCoordinator.WorldTickSnapshot snapshot = coordinator.snapshot();
++            final WorldTickCoordinator.WorldTickStats stats = snapshot.worldStats().get(worldName);
++            assertNotNull(stats, "missing stats for " + worldName);
++            assertEquals(1L, stats.tickCount());
++            assertTrue(stats.totalTickNanos() >= 0L);
++        } finally {
++            coordinator.shutdownForTesting();
++            restoreProperty("pewpew.worldTickCoordinator", previousEnabled);
++            restoreProperty("pewpew.worldTickCoordinator.testing", previousTesting);
++            restoreProperty("pewpew.worldTickCoordinator.workers", previousWorkers);
++        }
++    }
++
++    private static void restoreProperty(final String key, final String value) {
++        if (value == null) {
++            System.clearProperty(key);
++            return;
++        }
++        System.setProperty(key, value);
++    }
++}
