@@ -55,6 +55,23 @@
 - Bench plugin updated to remove chunk pregen, distribute players with 1s teleport spacing, place villages at player locations after distribution, then spawn villagers/hostiles post-delay; multiworld harness now uses teleport-delay config and shorter 5-minute sample defaults.
 - Re-ran multiworld baseline + Pewpew benchmarks with player distribution flow (2700 sample ticks, expected TPS 15); summaries updated in `docs/pewpew/findings/` and run directories cleaned.
 - Added damage cancellation for invulnerable villagers/players in bench plugin; re-ran multiworld benchmark and updated summaries (villager death logs no longer appear).
+- Ran multiworld A/B tests (all-on, all-off, path-only, sensors-only) using baseline summary reuse; async pathfinding is the main regression (+24% mspt, -15% TPS vs baseline), async sensors adds a small hit (~+2% mspt).
+- Added async-profiler fetch script and bench harness hooks (profiling gated by env vars); defaults now target async-profiler 4.2.1 with text output (mapped to flat), versioned install directory, and format-aware file extension. Harness now resolves the server JVM PID via run directory before profiling and routes profiler stdout/stderr to a per-run log.
+- Async pathfinding/sensors optimizations:
+  - AsyncAcquirePoi now skips duplicate pending requests, checks async queue capacity before snapshot work, builds target sets without streams, and reuses a thread-local SnapshotPathFinder/evaluator.
+  - AsyncSensorService now snapshots distances once and sorts snapshots directly to reduce allocations.
+  - Added `settings.async-pathfinding-max-pending` in `pewpew.yml` (maps to `pewpew.asyncPathfinding.maxPending`).
+- Profiling:
+  - Captured itimer and cpu profiles (cpu used `--all-user`) at `docs/pewpew/findings/profiles/profile-cpu-pewpew-cpu.txt` plus earlier itimer outputs.
+- A/B results after optimizations (ab2):
+  - all-on: avgMSPT 76.89 (+15.0%), avgTPS 13.09 (-10.3%)
+  - path-only: avgMSPT 74.78 (+11.8%), avgTPS 13.42 (-8.1%)
+  - sensors-only: avgMSPT 66.45 (-0.6%), avgTPS 14.72 (+0.8%)
+  - optional test: async workers=2 worsened regression (avgMSPT 80.68, -13.1% TPS).
+- Attempted PathTypeCache size/reuse tuning (ab3) regressed; changes were reverted.
+- Synced patch files for async changes and config wiring:
+  - Regenerated `AsyncSensorService` and `AsyncAcquirePoi` file patches from current sources.
+  - Added `PewpewConfig` file patch and feature patch to init it in `PaperBootstrap` and `CraftServer`.
 
 ## Build / test status
 - `./gradlew :pewpew-server:test` succeeded (warnings only).

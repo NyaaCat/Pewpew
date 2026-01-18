@@ -52,6 +52,18 @@ Multiworld overrides (run_multiverse_benchmark.sh):
 - `BENCH_POST_VILLAGE_DELAY_TICKS`
 - `BENCH_TELEPORT_DELAY_TICKS`
 
+Profiling (run_multiverse_benchmark.sh):
+- `BENCH_PROFILE=1` (enable async-profiler)
+- `BENCH_PROFILE_TARGET` (`pewpew`, `baseline`, or `both`)
+- `BENCH_PROFILE_EVENT` (default: `cpu`)
+- `BENCH_PROFILE_DURATION` (seconds; defaults to sample duration)
+- `BENCH_PROFILE_FORMAT` (default: `text`, mapped to `flat` output)
+- `BENCH_PROFILE_ARGS` (extra async-profiler CLI args, e.g. `--all-user -i 1000000`)
+- `BENCH_PROFILE_LOG_PATTERN` (log line that marks bench start)
+- `BENCH_PROFILE_OUTPUT_DIR` (default: `docs/pewpew/findings/profiles`)
+- `ASYNC_PROFILER_DIR` (default: `tmp/async-profiler-$ASYNC_PROFILER_VERSION`)
+- `ASYNC_PROFILER_VERSION` (default: `4.2.1`), `ASYNC_PROFILER_ARCH` (passed to fetch script)
+
 Stress profile notes:
 - Job-site rotation forces villager AcquirePoi churn (pathfinding hot path).
 - Hostile retargeting keeps pathfinding + sensing active around players.

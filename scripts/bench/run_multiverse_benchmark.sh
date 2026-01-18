@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ASYNC_PROFILER_VERSION="${ASYNC_PROFILER_VERSION:-4.2.1}"
+ASYNC_PROFILER_ARCH="${ASYNC_PROFILER_ARCH:-linux-x64}"
+ASYNC_PROFILER_DIR="${ASYNC_PROFILER_DIR:-$ROOT_DIR/tmp/async-profiler-$ASYNC_PROFILER_VERSION}"
 BASELINE_REPO="${BENCH_BASELINE_REPO:-/home/phoenix/works/pewpew-paper-baseline}"
 PAPER_REF="$(grep '^paperRef=' "$ROOT_DIR/gradle.properties" | cut -d= -f2)"
 PEWPEW_VERSION="$(grep '^version=' "$ROOT_DIR/gradle.properties" | cut -d= -f2)"
@@ -30,12 +33,20 @@ WARMUP_TICKS="${BENCH_WARMUP_TICKS:-0}"
 SAMPLE_TICKS="${BENCH_SAMPLE_TICKS:-2700}"
 SAMPLE_INTERVAL_TICKS="${BENCH_SAMPLE_INTERVAL_TICKS:-100}"
 EXPECTED_TPS="${BENCH_EXPECTED_TPS:-15}"
+BENCH_PROFILE="${BENCH_PROFILE:-0}"
+BENCH_PROFILE_TARGET="${BENCH_PROFILE_TARGET:-pewpew}"
+BENCH_PROFILE_EVENT="${BENCH_PROFILE_EVENT:-cpu}"
+BENCH_PROFILE_FORMAT="${BENCH_PROFILE_FORMAT:-text}"
+BENCH_PROFILE_ARGS="${BENCH_PROFILE_ARGS:-}"
+BENCH_PROFILE_START_TIMEOUT="${BENCH_PROFILE_START_TIMEOUT:-600}"
+BENCH_PROFILE_LOG_PATTERN="${BENCH_PROFILE_LOG_PATTERN:-Villages and entities ready; benchmarking can begin.}"
 
 RUN_ID="${BENCH_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
 RUN_ROOT="$ROOT_DIR/tmp/bench/runs/$RUN_ID-multiworld"
 RUN_BASELINE_DIR="$RUN_ROOT/baseline"
 RUN_PEWPEW_DIR="$RUN_ROOT/pewpew"
 REPORT_DIR="$ROOT_DIR/docs/pewpew/findings"
+BENCH_PROFILE_OUTPUT_DIR="${BENCH_PROFILE_OUTPUT_DIR:-$REPORT_DIR/profiles}"
 BASELINE_SUMMARY_OUT="$REPORT_DIR/multiverse-bench-summary-baseline.json"
 BASELINE_SUMMARY_IN="${BENCH_BASELINE_SUMMARY:-$BASELINE_SUMMARY_OUT}"
 PEWPEW_SUMMARY_OUT="$REPORT_DIR/multiverse-bench-summary.json"
@@ -54,6 +65,8 @@ PEWPEW_ASYNC_POOL_QUEUE_LIMIT="${BENCH_PEWPEW_ASYNC_POOL_QUEUE_LIMIT:--1}"
 PEWPEW_WORLD_TICK_WORKERS="${BENCH_PEWPEW_WORLD_TICK_WORKERS:--1}"
 PEWPEW_WORLD_TICK_STALL_NANOS="${BENCH_PEWPEW_WORLD_TICK_STALL_NANOS:-50000000}"
 SERVER_PID=""
+PROFILER_PID=""
+SERVER_JAVA_PID=""
 
 TOTAL_TICKS=$((WARMUP_TICKS + SAMPLE_TICKS))
 BENCH_SECONDS=$((TOTAL_TICKS / EXPECTED_TPS + 30))
@@ -63,6 +76,11 @@ POST_VILLAGE_DELAY_SECONDS=$((POST_VILLAGE_DELAY_TICKS / EXPECTED_TPS))
 DISTRIBUTION_SECONDS=$(((BOT_COUNT * TELEPORT_DELAY_TICKS) / EXPECTED_TPS))
 VILLAGE_PLACE_SECONDS=$((TOTAL_VILLAGES / EXPECTED_TPS))
 RUN_SECONDS=$((BENCH_SECONDS + DISTRIBUTION_SECONDS + VILLAGE_DELAY_SECONDS + POST_VILLAGE_DELAY_SECONDS + VILLAGE_PLACE_SECONDS + 30))
+PROFILE_DEFAULT_SECONDS=$((SAMPLE_TICKS / EXPECTED_TPS))
+if [ "$PROFILE_DEFAULT_SECONDS" -lt 10 ]; then
+    PROFILE_DEFAULT_SECONDS=10
+fi
+BENCH_PROFILE_DURATION="${BENCH_PROFILE_DURATION:-$PROFILE_DEFAULT_SECONDS}"
 
 function ensure_baseline_repo() {
     if [ ! -d "$BASELINE_REPO/.git" ]; then
@@ -106,6 +124,150 @@ function build_bench_plugin() {
 
 function plugin_jar_path() {
     ls "$BENCH_PLUGIN_REPO/build/libs/pewpew-bench-"*.jar | head -n 1
+}
+
+function ensure_async_profiler() {
+    if [ ! -x "$ASYNC_PROFILER_DIR/bin/asprof" ] && [ ! -x "$ASYNC_PROFILER_DIR/profiler.sh" ]; then
+        ASYNC_PROFILER_DIR="$ASYNC_PROFILER_DIR" \
+        ASYNC_PROFILER_VERSION="$ASYNC_PROFILER_VERSION" \
+        ASYNC_PROFILER_ARCH="$ASYNC_PROFILER_ARCH" \
+        "$ROOT_DIR/scripts/profiler/fetch_async_profiler.sh"
+    fi
+}
+
+function profiler_cmd() {
+    if [ -x "$ASYNC_PROFILER_DIR/bin/asprof" ]; then
+        echo "$ASYNC_PROFILER_DIR/bin/asprof"
+        return 0
+    fi
+    if [ -x "$ASYNC_PROFILER_DIR/profiler.sh" ]; then
+        echo "$ASYNC_PROFILER_DIR/profiler.sh"
+        return 0
+    fi
+    return 1
+}
+
+function should_profile() {
+    local label="$1"
+    if [ "$BENCH_PROFILE" != "1" ]; then
+        return 1
+    fi
+    case "$BENCH_PROFILE_TARGET" in
+        both)
+            return 0
+            ;;
+        baseline)
+            [ "$label" = "baseline" ]
+            return $?
+            ;;
+        pewpew)
+            [ "$label" = "pewpew" ]
+            return $?
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+function wait_for_log_line() {
+    local log_file="$1"
+    local pattern="$2"
+    local timeout_seconds="$3"
+    local elapsed=0
+    until grep -Fq "$pattern" "$log_file"; do
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ "$elapsed" -ge "$timeout_seconds" ]; then
+            echo "Timeout waiting for log line: $pattern"
+            return 1
+        fi
+    done
+}
+
+function resolve_profile_format() {
+    case "$BENCH_PROFILE_FORMAT" in
+        text)
+            echo "flat"
+            ;;
+        html)
+            echo "flamegraph"
+            ;;
+        *)
+            echo "$BENCH_PROFILE_FORMAT"
+            ;;
+    esac
+}
+
+function profile_extension() {
+    case "$BENCH_PROFILE_FORMAT" in
+        flamegraph|html)
+            echo "html"
+            ;;
+        jfr)
+            echo "jfr"
+            ;;
+        text|flat|traces|collapsed|tree)
+            echo "txt"
+            ;;
+        *)
+            echo "$BENCH_PROFILE_FORMAT"
+            ;;
+    esac
+}
+
+function resolve_server_java_pid() {
+    local run_dir="$1"
+    local timeout_seconds="${2:-30}"
+    local elapsed=0
+    while [ "$elapsed" -lt "$timeout_seconds" ]; do
+        for pid in $(pgrep -f "java" || true); do
+            local cwd
+            cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+            if [ "$cwd" = "$run_dir" ]; then
+                SERVER_JAVA_PID="$pid"
+                return 0
+            fi
+        done
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    return 1
+}
+
+function start_profiler() {
+    local label="$1"
+    local output_dir="$BENCH_PROFILE_OUTPUT_DIR"
+    local output_ext
+    output_ext="$(profile_extension)"
+    local output_file="$output_dir/${RUN_ID}-${label}-${BENCH_PROFILE_EVENT}.${output_ext}"
+    local output_log="$output_dir/${RUN_ID}-${label}-${BENCH_PROFILE_EVENT}.log"
+    local profile_format
+    profile_format="$(resolve_profile_format)"
+    local extra_args=()
+    local cmd
+    cmd="$(profiler_cmd || true)"
+    if [ -z "$cmd" ]; then
+        echo "async-profiler launcher not found in $ASYNC_PROFILER_DIR" >&2
+        return
+    fi
+    if [ -z "$SERVER_JAVA_PID" ]; then
+        echo "Skipping profiling; server Java PID not resolved." >&2
+        return
+    fi
+    if [ -n "$BENCH_PROFILE_ARGS" ]; then
+        read -r -a extra_args <<< "$BENCH_PROFILE_ARGS"
+    fi
+    mkdir -p "$output_dir"
+    echo "Starting async-profiler ($BENCH_PROFILE_EVENT) for ${BENCH_PROFILE_DURATION}s -> $output_file" >&2
+    "$cmd" \
+        -d "$BENCH_PROFILE_DURATION" \
+        -e "$BENCH_PROFILE_EVENT" \
+        -o "$profile_format" \
+        -f "$output_file" \
+        "${extra_args[@]}" \
+        "$SERVER_JAVA_PID" > "$output_log" 2>&1 &
+    PROFILER_PID=$!
 }
 
 function write_config() {
@@ -242,6 +404,7 @@ function run_server() {
     local run_dir="$3"
     local result_out="$4"
     local java_opts="$5"
+    local profile_label="$6"
 
     local fifo="$run_dir/console.in"
     rm -f "$fifo"
@@ -258,13 +421,33 @@ function run_server() {
 
     wait_for_ready "$run_dir/server.log"
 
+    SERVER_JAVA_PID=""
+    if resolve_server_java_pid "$run_dir"; then
+        echo "Resolved server Java PID: $SERVER_JAVA_PID"
+    else
+        echo "Failed to resolve server Java PID for $run_dir"
+    fi
+
     echo "Creating extra world via Multiverse"
     printf "mv create ${WORLD_NAMES[1]} normal -s %s\n" "$SEED" >&3
     printf "mv load ${WORLD_NAMES[1]}\n" >&3
     wait_for_marker "$run_dir/plugins/PewpewBench/multiworld-ready.txt"
 
     echo "Spawning $BOT_COUNT bots for $RUN_SECONDS seconds"
-    node "$ROOT_DIR/scripts/bench/bots.js" --count "$BOT_COUNT" --duration "$RUN_SECONDS" >/dev/null 2>&1
+    node "$ROOT_DIR/scripts/bench/bots.js" --count "$BOT_COUNT" --duration "$RUN_SECONDS" >/dev/null 2>&1 &
+    local bot_pid=$!
+
+    PROFILER_PID=""
+    if should_profile "$profile_label"; then
+        ensure_async_profiler
+        wait_for_log_line "$run_dir/server.log" "$BENCH_PROFILE_LOG_PATTERN" "$BENCH_PROFILE_START_TIMEOUT"
+        start_profiler "$profile_label"
+    fi
+
+    wait "$bot_pid"
+    if [ -n "$PROFILER_PID" ]; then
+        wait "$PROFILER_PID" || true
+    fi
     sleep 5
 
     echo "Stopping server"
@@ -274,6 +457,7 @@ function run_server() {
     exec 3>&-
     SERVER_PID=""
     SERVER_FIFO=""
+    SERVER_JAVA_PID=""
 
     local summary="$run_dir/plugins/PewpewBench/bench-summary.json"
     if [ ! -f "$summary" ]; then
@@ -284,6 +468,9 @@ function run_server() {
 }
 
 function cleanup_run_root() {
+    if [ -n "${PROFILER_PID:-}" ] && kill -0 "$PROFILER_PID" >/dev/null 2>&1; then
+        kill "$PROFILER_PID" >/dev/null 2>&1 || true
+    fi
     if [ -n "${SERVER_PID:-}" ] && kill -0 "$SERVER_PID" >/dev/null 2>&1; then
         kill "$SERVER_PID" >/dev/null 2>&1 || true
         sleep 2
@@ -325,9 +512,9 @@ if [ "${BENCH_SKIP_BASELINE:-}" = "1" ]; then
         cp "$BASELINE_SUMMARY_IN" "$BASELINE_SUMMARY_OUT"
     fi
 else
-    run_server "$BASELINE_REPO" ":paper-server:runDevServer" "$RUN_BASELINE_DIR" "$BASELINE_SUMMARY_OUT" ""
+    run_server "$BASELINE_REPO" ":paper-server:runDevServer" "$RUN_BASELINE_DIR" "$BASELINE_SUMMARY_OUT" "" "baseline"
 fi
-run_server "$ROOT_DIR" ":pewpew-server:runDevServer" "$RUN_PEWPEW_DIR" "$PEWPEW_SUMMARY_OUT" "$PEWPEW_JAVA_OPTS"
+run_server "$ROOT_DIR" ":pewpew-server:runDevServer" "$RUN_PEWPEW_DIR" "$PEWPEW_SUMMARY_OUT" "$PEWPEW_JAVA_OPTS" "pewpew"
 
 python3 "$ROOT_DIR/scripts/bench/multiverse_report.py" \
     --summary "$BASELINE_SUMMARY_OUT" \

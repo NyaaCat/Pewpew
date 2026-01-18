@@ -1,0 +1,128 @@
+--- Execution profile ---
+Total samples       : 22
+not_walkable_Java   : 1 (4.55%)
+
+--- 9000000 ns (40.91%), 9 samples
+  [ 0] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 4000000 ns (18.18%), 4 samples
+  [ 0] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] MethodData::is_methodData() const
+  [ 1] ciObjectFactory::get_metadata(Metadata*)
+  [ 2] ciMethod::ensure_method_data(methodHandle const&)
+  [ 3] ciMethod::ensure_method_data()
+  [ 4] Compilation::compile_java_method()
+  [ 5] Compilation::compile_method()
+  [ 6] Compilation::Compilation(AbstractCompiler*, ciEnv*, ciMethod*, int, BufferBlob*, bool, DirectiveSet*)
+  [ 7] Compiler::compile_method(ciEnv*, ciMethod*, int, bool, DirectiveSet*)
+  [ 8] CompileBroker::invoke_compiler_on_method(CompileTask*)
+  [ 9] CompileBroker::compiler_thread_loop()
+  [10] JavaThread::thread_main_inner()
+  [11] Thread::call_run()
+  [12] thread_native_entry(Thread*)
+  [13] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] GraphBuilder::append_with_bci(Instruction*, int)
+  [ 1] GraphBuilder::iterate_bytecodes_for_block(int)
+  [ 2] GraphBuilder::iterate_all_blocks(bool)
+  [ 3] GraphBuilder::try_inline_full(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)
+  [ 4] GraphBuilder::try_inline(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)
+  [ 5] GraphBuilder::invoke(Bytecodes::Code)
+  [ 6] GraphBuilder::iterate_bytecodes_for_block(int)
+  [ 7] GraphBuilder::iterate_all_blocks(bool)
+  [ 8] GraphBuilder::try_inline_full(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)
+  [ 9] GraphBuilder::try_inline(ciMethod*, bool, bool, Bytecodes::Code, Instruction*)
+  [10] GraphBuilder::invoke(Bytecodes::Code)
+  [11] GraphBuilder::iterate_bytecodes_for_block(int)
+  [12] GraphBuilder::iterate_all_blocks(bool)
+  [13] GraphBuilder::GraphBuilder(Compilation*, IRScope*)
+  [14] IRScope::IRScope(Compilation*, IRScope*, int, ciMethod*, int, bool)
+  [15] IR::IR(Compilation*, ciMethod*, int)
+  [16] Compilation::build_hir() [clone .part.0]
+  [17] Compilation::compile_java_method()
+  [18] Compilation::compile_method()
+  [19] Compilation::Compilation(AbstractCompiler*, ciEnv*, ciMethod*, int, BufferBlob*, bool, DirectiveSet*)
+  [20] Compiler::compile_method(ciEnv*, ciMethod*, int, bool, DirectiveSet*)
+  [21] CompileBroker::invoke_compiler_on_method(CompileTask*)
+  [22] CompileBroker::compiler_thread_loop()
+  [23] JavaThread::thread_main_inner()
+  [24] Thread::call_run()
+  [25] thread_native_entry(Thread*)
+  [26] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] WatcherThread::sleep() const
+  [ 1] WatcherThread::run()
+  [ 2] Thread::call_run()
+  [ 3] thread_native_entry(Thread*)
+  [ 4] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] nmethod::oops_do(OopClosure*, bool)
+  [ 1] G1CollectedHeap::register_nmethod(nmethod*)
+  [ 2] nmethod::nmethod(Method*, CompilerType, int, int, int, CodeOffsets*, int, DebugInformationRecorder*, Dependencies*, CodeBuffer*, int, OopMapSet*, ExceptionHandlerTable*, ImplicitExceptionTable*, AbstractCompiler*, CompLevel, char*, int, JVMCINMethodData*)
+  [ 3] nmethod::new_nmethod(methodHandle const&, int, int, CodeOffsets*, int, DebugInformationRecorder*, Dependencies*, CodeBuffer*, int, OopMapSet*, ExceptionHandlerTable*, ImplicitExceptionTable*, AbstractCompiler*, CompLevel, char*, int, JVMCINMethodData*)
+  [ 4] ciEnv::register_method(ciMethod*, int, CodeOffsets*, int, CodeBuffer*, int, OopMapSet*, ExceptionHandlerTable*, ImplicitExceptionTable*, AbstractCompiler*, bool, bool, bool, int, RTMState)
+  [ 5] Compilation::install_code(int)
+  [ 6] Compilation::compile_method()
+  [ 7] Compilation::Compilation(AbstractCompiler*, ciEnv*, ciMethod*, int, BufferBlob*, bool, DirectiveSet*)
+  [ 8] Compiler::compile_method(ciEnv*, ciMethod*, int, bool, DirectiveSet*)
+  [ 9] CompileBroker::invoke_compiler_on_method(CompileTask*)
+  [10] CompileBroker::compiler_thread_loop()
+  [11] JavaThread::thread_main_inner()
+  [12] Thread::call_run()
+  [13] thread_native_entry(Thread*)
+  [14] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] clock_gettime
+  [ 1] WatcherThread::sleep() const
+  [ 2] WatcherThread::run()
+  [ 3] Thread::call_run()
+  [ 4] thread_native_entry(Thread*)
+  [ 5] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] Interpreter
+  [ 1] [not_walkable_Java]
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] /usr/lib/x86_64-linux-gnu/libc.so.6
+  [ 1] WatcherThread::run()
+  [ 2] Thread::call_run()
+  [ 3] thread_native_entry(Thread*)
+  [ 4] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] SafepointMechanism::update_poll_values(JavaThread*)
+  [ 1] Monitor::wait(unsigned long)
+  [ 2] CompileQueue::get(CompilerThread*)
+  [ 3] CompileBroker::compiler_thread_loop()
+  [ 4] JavaThread::thread_main_inner()
+  [ 5] Thread::call_run()
+  [ 6] thread_native_entry(Thread*)
+  [ 7] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+--- 1000000 ns (4.55%), 1 sample
+  [ 0] clock_gettime
+  [ 1] clock_gettime
+  [ 2] G1ServiceThread::wait_for_task()
+  [ 3] G1ServiceThread::run_service()
+  [ 4] ConcurrentGCThread::run()
+  [ 5] Thread::call_run()
+  [ 6] thread_native_entry(Thread*)
+  [ 7] /usr/lib/x86_64-linux-gnu/libc.so.6
+
+          ns  percent  samples  top
+  ----------  -------  -------  ---
+    14000000   63.64%       14  /usr/lib/x86_64-linux-gnu/libc.so.6
+     2000000    9.09%        2  clock_gettime
+     1000000    4.55%        1  GraphBuilder::append_with_bci(Instruction*, int)
+     1000000    4.55%        1  Interpreter
+     1000000    4.55%        1  MethodData::is_methodData() const
+     1000000    4.55%        1  SafepointMechanism::update_poll_values(JavaThread*)
+     1000000    4.55%        1  WatcherThread::sleep() const
+     1000000    4.55%        1  nmethod::oops_do(OopClosure*, bool)
