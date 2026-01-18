@@ -5,17 +5,20 @@ Subject: [PATCH] Optimize block entity ticker removals
 
 
 diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
-index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+index 0000000..0000000 100644
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
-@@ -109,7 +109,7 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
-     );
+@@ -106,7 +106,7 @@
+     public static final int TICKS_PER_DAY = 24000;
+     public static final int MAX_ENTITY_SPAWN_Y = 20000000;
+     public static final int MIN_ENTITY_SPAWN_Y = -20000000;
 -    public final List<TickingBlockEntity> blockEntityTickers = Lists.newArrayList();
 +    public final io.papermc.paper.pewpew.BlockEntityTickersList blockEntityTickers = new io.papermc.paper.pewpew.BlockEntityTickersList(); // Pewpew - optimize block entity removals
-     protected final CollectingNeighborUpdater neighborUpdater;
+     protected final NeighborUpdater neighborUpdater;
      private final List<TickingBlockEntity> pendingBlockEntityTickers = Lists.newArrayList();
      private boolean tickingBlockEntities;
-@@ -1463,8 +1463,6 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
+@@ -1455,13 +1455,11 @@
+         boolean runsNormally = this.tickRateManager().runsNormally();
  
          int tickedEntities = 0; // Paper - rewrite chunk system
 -        var toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<TickingBlockEntity>(); // Paper - Fix MC-117075; use removeAll
@@ -28,8 +31,8 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
 +                this.blockEntityTickers.markAsRemoved(this.tileTickPosition); // Pewpew - optimize block entity removals
              } else if (runsNormally && this.shouldTickBlocksAt(tickingBlockEntity.getPos())) {
                  tickingBlockEntity.tick();
-@@ -1479,7 +1477,7 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
-                 }
+                 // Paper start - rewrite chunk system
+@@ -1471,7 +1469,7 @@
                  // Paper end - rewrite chunk system
              }
          }
