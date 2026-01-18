@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pewpew <pewpew@nyaa.cat>
+Date: Sun, 18 Jan 2026 15:18:00 +0900
+Subject: [PATCH] Expose per-world MSPT in /mspt
+
+
+diff --git a/src/main/java/io/papermc/paper/command/MSPTCommand.java b/src/main/java/io/papermc/paper/command/MSPTCommand.java
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/src/main/java/io/papermc/paper/command/MSPTCommand.java
++++ b/src/main/java/io/papermc/paper/command/MSPTCommand.java
+@@ -1,6 +1,7 @@
+ package io.papermc.paper.command;
+ 
+ import net.kyori.adventure.text.Component;
+ import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerLevel;
+ import org.bukkit.Location;
+ import org.bukkit.command.Command;
+ import org.bukkit.command.CommandSender;
+@@ -67,6 +68,21 @@ public final class MSPTCommand extends Command {
+                     times.get(6), SLASH, times.get(7), SLASH, times.get(8)
+                 )
+             )
+         );
++
++        for (ServerLevel serverLevel : server.getAllLevels()) {
++            List<Component> worldTimes = new ArrayList<>();
++            worldTimes.addAll(eval(serverLevel.tickTimes5s.getTimes()));
++            worldTimes.addAll(eval(serverLevel.tickTimes10s.getTimes()));
++            worldTimes.addAll(eval(serverLevel.tickTimes1m.getTimes()));
++
++            sender.sendMessage(text().content("◴ " + serverLevel.getWorld().getName() + ": ").color(GOLD)
++                .append(text().color(GRAY)
++                    .append(
++                        worldTimes.get(0), SLASH, worldTimes.get(1), SLASH, worldTimes.get(2), text(", ", YELLOW),
++                        worldTimes.get(3), SLASH, worldTimes.get(4), SLASH, worldTimes.get(5), text(", ", YELLOW),
++                        worldTimes.get(6), SLASH, worldTimes.get(7), SLASH, worldTimes.get(8)
++                    )
++                )
++            );
++        }
+         return true;
+     }
