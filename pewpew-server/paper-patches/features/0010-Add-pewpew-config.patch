@@ -12,7 +12,7 @@ diff --git a/src/main/java/io/papermc/paper/PaperBootstrap.java b/src/main/java/
 index 314cb08dd0af4a4abc3db4368df731cfe06a1df7..5f6b2a1c5b3df2f0c8a3f7a9eade7c0a1f23abcd 100644
 --- a/src/main/java/io/papermc/paper/PaperBootstrap.java
 +++ b/src/main/java/io/papermc/paper/PaperBootstrap.java
-@@ -1,7 +1,9 @@
+@@ -1,6 +1,8 @@
  package io.papermc.paper;
  
 +import io.papermc.paper.pewpew.PewpewConfig;
@@ -35,7 +35,8 @@ diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/ja
 index cff4ff4e58cba00dc15562a310825959816e2e02..4f0de104d6a1e0a9d7c4c2c2b15a9e7e3f0c2d8a 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -12,6 +12,7 @@ import com.mojang.brigadier.StringReader;
+@@ -12,7 +12,8 @@ import com.mojang.brigadier.StringReader;
+ import com.mojang.brigadier.StringReader;
  import com.mojang.brigadier.exceptions.CommandSyntaxException;
  import com.mojang.serialization.Dynamic;
  import com.mojang.serialization.Lifecycle;
@@ -43,7 +44,7 @@ index cff4ff4e58cba00dc15562a310825959816e2e02..4f0de104d6a1e0a9d7c4c2c2b15a9e7e
  import io.papermc.paper.pewpew.WorldTickCoordinator;
  import io.papermc.paper.configuration.PaperServerConfiguration;
  import io.papermc.paper.configuration.ServerConfiguration;
-@@ -1049,6 +1050,7 @@ public final class CraftServer implements Server {
+@@ -1049,5 +1050,6 @@ public final class CraftServer implements Server {
  
          org.spigotmc.SpigotConfig.init((File) this.console.options.valueOf("spigot-settings")); // Spigot
 +        PewpewConfig.init(new File("pewpew.yml")); // Pewpew
