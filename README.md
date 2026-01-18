@@ -11,10 +11,11 @@ any behavior-changing optimizations are opt-in and documented.
 
 ## Patch workflow
 - Make code changes in `paper-server/` (CraftBukkit/Paper) and `pewpew-server/src/minecraft/java` (NMS).
-- Do not edit `pewpew-server/paper-patches` or `pewpew-server/minecraft-patches` directly.
 - Ensure sources are materialized with `./gradlew applyAllPatches` (or `./gradlew :pewpew-server:applyAllServerPatches`).
-- Export patches with `./gradlew :pewpew-server:rebuildAllServerPatches`.
-- New files are emitted as file patches (`pewpew-server/paper-patches/files` or `pewpew-server/minecraft-patches/sources`); edits to existing sources become feature patches.
+- Prefer the smallest rebuild task needed (e.g. `./gradlew :pewpew-server:rebuildMinecraftFeaturePatches` or `./gradlew :pewpew-server:rebuildPaperServerFeaturePatches`).
+- Avoid `rebuildAllServerPatches` unless you intend to refresh the full patch series; if it churns patches, revert and apply the minimal diffs manually.
+- New files become file patches (`pewpew-server/paper-patches/files` or `pewpew-server/minecraft-patches/sources`); edits to existing sources become feature patches.
+- `rebuildPaperServerFilePatches` may log a missing `src/main/resources/logo.png`; it is safe to ignore.
 
 ## Build
 - `./gradlew build`
