@@ -5,10 +5,10 @@ Subject: [PATCH] Optimize block entity ticker removals
 
 
 diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
-index 0000000..0000000 100644
+index be16627136f7b3979e62308f58b96a2b16ee9f62..d541d17c8ccd350d6b7aaf4d256d37a5061dedd4 100644
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
-@@ -106,7 +106,7 @@
+@@ -106,7 +106,7 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
      public static final int TICKS_PER_DAY = 24000;
      public static final int MAX_ENTITY_SPAWN_Y = 20000000;
      public static final int MIN_ENTITY_SPAWN_Y = -20000000;
@@ -17,7 +17,7 @@ index 0000000..0000000 100644
      protected final NeighborUpdater neighborUpdater;
      private final List<TickingBlockEntity> pendingBlockEntityTickers = Lists.newArrayList();
      private boolean tickingBlockEntities;
-@@ -1455,13 +1455,11 @@
+@@ -1455,13 +1455,11 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
          boolean runsNormally = this.tickRateManager().runsNormally();
  
          int tickedEntities = 0; // Paper - rewrite chunk system
@@ -32,7 +32,7 @@ index 0000000..0000000 100644
              } else if (runsNormally && this.shouldTickBlocksAt(tickingBlockEntity.getPos())) {
                  tickingBlockEntity.tick();
                  // Paper start - rewrite chunk system
-@@ -1471,7 +1469,7 @@
+@@ -1471,7 +1469,7 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
                  // Paper end - rewrite chunk system
              }
          }

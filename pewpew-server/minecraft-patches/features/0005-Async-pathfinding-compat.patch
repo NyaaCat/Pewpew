@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sun, 18 Jan 2026 16:28:55 +0000
+Subject: [PATCH] Async pathfinding compat
+
+
+diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index dd1a95111d965bcd7f53be9d4224dd213e4e0705..00bfbe58a3d079568cbdcf5e6795862c398bb701 100644
+--- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -72,7 +72,7 @@ public abstract class PathNavigation {
+         this.updatePathfinderMaxVisitedNodes();
+     }
+ 
+-    private float getMaxPathLength() {
++    public float getMaxPathLength() {
+         return Math.max((float)this.mob.getAttributeValue(Attributes.FOLLOW_RANGE), this.requiredPathLength);
+     }
+ 
+@@ -84,6 +84,10 @@ public abstract class PathNavigation {
+         this.maxVisitedNodesMultiplier = multiplier;
+     }
+ 
++    public float getMaxVisitedNodesMultiplier() {
++        return this.maxVisitedNodesMultiplier;
++    }
++
+     @Nullable
+     public BlockPos getTargetPos() {
+         return this.targetPos;
+diff --git a/net/minecraft/world/level/chunk/LevelChunkSection.java b/net/minecraft/world/level/chunk/LevelChunkSection.java
+index df717c545472006b99532280c38c1fbef12bcf82..da8b7ef4e0787ec3b1359a8b6cafb791a9a8c241 100644
+--- a/net/minecraft/world/level/chunk/LevelChunkSection.java
++++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
+@@ -21,6 +21,7 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
+     short nonEmptyBlockCount; // Paper - package private
+     private short tickingBlockCount;
+     private short tickingFluidCount;
++    private long changeVersion;
+     public final PalettedContainer<BlockState> states;
+     private PalettedContainer<Holder<Biome>> biomes; // CraftBukkit - read/write
+ 
+@@ -52,6 +53,7 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
+         this.nonEmptyBlockCount = section.nonEmptyBlockCount;
+         this.tickingBlockCount = section.tickingBlockCount;
+         this.tickingFluidCount = section.tickingFluidCount;
++        this.changeVersion = section.changeVersion;
+         this.states = section.states.copy();
+         this.biomes = section.biomes.copy();
+     }
+@@ -140,6 +142,10 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
+             blockState = this.states.getAndSetUnchecked(x, y, z, state);
+         }
+ 
++        if (blockState != state) {
++            this.changeVersion++;
++        }
++
+         FluidState fluidState = blockState.getFluidState();
+         FluidState fluidState1 = state.getFluidState();
+         if (!blockState.isAir()) {
+@@ -169,6 +175,10 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
+         return blockState;
+     }
+ 
++    public long getChangeVersion() {
++        return this.changeVersion;
++    }
++
+     public boolean hasOnlyAir() {
+         return this.nonEmptyBlockCount == 0;
+     }
+diff --git a/net/minecraft/world/level/pathfinder/PathfindingContext.java b/net/minecraft/world/level/pathfinder/PathfindingContext.java
+index 4eca1dd0819c7ee7a77e45fc5fa03f4ee5cdceaf..ad33013951d91cefeac94459da04c9a7bb2e87ba 100644
+--- a/net/minecraft/world/level/pathfinder/PathfindingContext.java
++++ b/net/minecraft/world/level/pathfinder/PathfindingContext.java
+@@ -14,6 +14,12 @@ public class PathfindingContext {
+     private final BlockPos mobPosition;
+     private final BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
+ 
++    public PathfindingContext(CollisionGetter level, BlockPos mobPosition, @Nullable PathTypeCache cache) {
++        this.level = level;
++        this.cache = cache;
++        this.mobPosition = mobPosition;
++    }
++
+     public PathfindingContext(CollisionGetter level, Mob mob) {
+         this.level = level;
+         if (mob.level() instanceof ServerLevel serverLevel) {

@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sun, 18 Jan 2026 16:39:15 +0000
+Subject: [PATCH] Synchronize map id allocation
+
+
+diff --git a/net/minecraft/world/level/saveddata/maps/MapIndex.java b/net/minecraft/world/level/saveddata/maps/MapIndex.java
+index 06025d79cc2297119b22224d777aca79f9d3d9c1..a78803d0c94062056e56d1583df4f120fa4a47ec 100644
+--- a/net/minecraft/world/level/saveddata/maps/MapIndex.java
++++ b/net/minecraft/world/level/saveddata/maps/MapIndex.java
+@@ -22,7 +22,7 @@ public class MapIndex extends SavedData {
+         this.lastMapId = lastMapId;
+     }
+ 
+-    public MapId getNextMapId() {
++    public synchronized MapId getNextMapId() {
+         MapId mapId = new MapId(++this.lastMapId);
+         this.setDirty();
+         return mapId;

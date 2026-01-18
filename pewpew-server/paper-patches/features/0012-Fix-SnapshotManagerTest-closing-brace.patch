@@ -1,0 +1,15 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sun, 18 Jan 2026 16:30:30 +0000
+Subject: [PATCH] Fix SnapshotManagerTest closing brace
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/SnapshotManagerTest.java b/src/test/java/io/papermc/paper/pewpew/SnapshotManagerTest.java
+index ac68dd2d927b4c63b588fd3bd08d0025587fe50c..6ae0fdf184b00ff9392b336dd4693be77a6a859b 100644
+--- a/src/test/java/io/papermc/paper/pewpew/SnapshotManagerTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/SnapshotManagerTest.java
+@@ -28,3 +28,4 @@ class SnapshotManagerTest {
+         manager.clearWorld("snapshot_world");
+         assertNull(manager.getSnapshot("snapshot_world"));
+     }
++}

@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sun, 18 Jan 2026 16:35:01 +0000
+Subject: [PATCH] Make CraftBukkit thread locals
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
+index 5d4faad9df4824cfd61abfd4df011c006f114424..8c42e0157708e35b2963f743a9500f3d2da6f2f2 100644
+--- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
++++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
+@@ -32,7 +32,7 @@ public abstract class CraftBlockEntityState<T extends BlockEntity> extends Craft
+     private final T blockEntity;
+     private final T snapshot;
+     public boolean snapshotDisabled; // Paper
+-    public static boolean DISABLE_SNAPSHOT = false; // Paper
++    public static final ThreadLocal<Boolean> DISABLE_SNAPSHOT = ThreadLocal.withInitial(() -> Boolean.FALSE); // Paper
+ 
+     public CraftBlockEntityState(World world, T blockEntity) {
+         super(world, blockEntity.getBlockPos(), blockEntity.getBlockState());
+@@ -41,8 +41,9 @@ public abstract class CraftBlockEntityState<T extends BlockEntity> extends Craft
+ 
+         try { // Paper - Show blockstate location if we failed to read it
+         // Paper start
+-        this.snapshotDisabled = DISABLE_SNAPSHOT;
+-        if (DISABLE_SNAPSHOT) {
++        Boolean disableSnapshot = DISABLE_SNAPSHOT.get();
++        this.snapshotDisabled = disableSnapshot;
++        if (Boolean.TRUE.equals(disableSnapshot)) {
+             this.snapshot = this.blockEntity;
+         } else {
+             this.snapshot = this.createSnapshot(blockEntity);
+diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java
+index 3c9131ac3cfb4f758e76830ca48813feb321e4c6..9639e32e4dca412132e29d6cac82948b56bed852 100644
+--- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java
++++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java
+@@ -195,14 +195,14 @@ public final class CraftBlockStates {
+         BlockPos pos = craftBlock.getPosition();
+         net.minecraft.world.level.block.state.BlockState state = craftBlock.getNMS();
+         BlockEntity blockEntity = craftBlock.getHandle().getBlockEntity(pos);
+-        boolean prev = CraftBlockEntityState.DISABLE_SNAPSHOT;
+-        CraftBlockEntityState.DISABLE_SNAPSHOT = !useSnapshot;
++        Boolean prev = CraftBlockEntityState.DISABLE_SNAPSHOT.get();
++        CraftBlockEntityState.DISABLE_SNAPSHOT.set(!useSnapshot);
+         try {
+             CraftBlockState blockState = CraftBlockStates.getBlockState(world, pos, state, blockEntity);
+             blockState.setWorldHandle(craftBlock.getHandle()); // Inject the block's generator access
+             return blockState;
+         } finally {
+-            CraftBlockEntityState.DISABLE_SNAPSHOT = prev;
++            CraftBlockEntityState.DISABLE_SNAPSHOT.set(prev);
+         }
+     }
+ 
+diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+index 9878d6842ec77b9a01c08046459f7d320e4c47fb..78b995fbc44514cdb2f81af85b51a9f7dbd18e12 100644
+--- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
++++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
+@@ -819,7 +819,7 @@ public class CraftEventFactory {
+         return false;
+     }
+ 
+-    public static BlockPos sourceBlockOverride = null; // SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPos up to five methods deep.
++    public static final ThreadLocal<BlockPos> sourceBlockOverrideRT = new ThreadLocal<>(); // SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPos up to five methods deep.
+ 
+     public static boolean handleBlockSpreadEvent(LevelAccessor world, BlockPos source, BlockPos target, net.minecraft.world.level.block.state.BlockState state, int flags) {
+         return handleBlockSpreadEvent(world, source, target, state, flags, false);
+@@ -835,7 +835,8 @@ public class CraftEventFactory {
+         CraftBlockState snapshot = CraftBlockStates.getBlockState(world, target);
+         snapshot.setData(state);
+ 
+-        BlockSpreadEvent event = new BlockSpreadEvent(snapshot.getBlock(), CraftBlock.at(world, CraftEventFactory.sourceBlockOverride != null ? CraftEventFactory.sourceBlockOverride : source), snapshot);
++        BlockPos override = CraftEventFactory.sourceBlockOverrideRT.get();
++        BlockSpreadEvent event = new BlockSpreadEvent(snapshot.getBlock(), CraftBlock.at(world, override != null ? override : source), snapshot);
+         if (event.callEvent()) {
+             boolean result = snapshot.place(flags);
+             return !checkSetResult || result;

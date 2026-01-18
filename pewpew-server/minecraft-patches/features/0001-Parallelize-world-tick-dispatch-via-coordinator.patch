@@ -5,10 +5,10 @@ Subject: [PATCH] Parallelize world tick dispatch via coordinator
 
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..0795442bf7898f308ecbd9bd89859997e3d8fef5 100644
+index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9b7a9370b 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1705,33 +1705,77 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1705,33 +1705,79 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
          }
  
          this.isIteratingOverLevels = true; // Paper - Throw exception on world create while being ticked
@@ -45,6 +45,7 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..0795442bf7898f308ecbd9bd89859997
 +                    // CraftBukkit end */
  
 -            profilerFiller.push("tick");
++                    io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(serverLevel.getWorld().getName()));
 +                    worldProfiler.push("tick");
  
 +                    try {
@@ -88,6 +89,7 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..0795442bf7898f308ecbd9bd89859997
 +                }
 +                // CraftBukkit end */
 +
++                io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(serverLevel.getWorld().getName()));
 +                profilerFiller.push("tick");
 +
 +                try {

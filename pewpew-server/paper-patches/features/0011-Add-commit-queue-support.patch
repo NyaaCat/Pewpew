@@ -1,0 +1,89 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sun, 18 Jan 2026 16:27:03 +0000
+Subject: [PATCH] Add commit queue support
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index 84ff4b1ad7ff47e69f28f98e66625ba2719f84a1..6440dc8d500d8d696baaa0794897f26aa9ae337f 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -2,6 +2,7 @@ package io.papermc.paper.pewpew;
+ 
+ import java.util.Collections;
+ import java.util.LinkedHashMap;
++import java.util.List;
+ import java.util.Map;
+ import java.util.Objects;
+ import java.util.concurrent.ConcurrentHashMap;
+@@ -35,6 +36,9 @@ public final class WorldTickCoordinator {
+     private final AtomicReference<TickBarrier> inFlightBarrier = new AtomicReference<>();
+     private final Object executorLock = new Object();
+     private volatile ThreadPoolExecutor executor;
++    private final SnapshotManager snapshotManager = new SnapshotManager();
++    private final ConcurrentHashMap<String, CommitQueue> commitQueues = new ConcurrentHashMap<>();
++    private final ConcurrentHashMap<String, AtomicLong> generationsByWorld = new ConcurrentHashMap<>();
+ 
+     private WorldTickCoordinator() {
+     }
+@@ -168,6 +172,60 @@ public final class WorldTickCoordinator {
+         );
+     }
+ 
++    public long currentGeneration(final String worldName) {
++        return generationFor(worldName).get();
++    }
++
++    public SnapshotManager.Snapshot publishSnapshot(final String worldName, final long tickId, final Map<String, Long> versionMarkers) {
++        final long generationId = generationFor(worldName).incrementAndGet();
++        final SnapshotManager.Snapshot snapshot = this.snapshotManager.buildSnapshot(worldName, tickId, generationId, versionMarkers);
++        this.snapshotManager.publishSnapshot(snapshot);
++        return snapshot;
++    }
++
++    public SnapshotManager.Snapshot getSnapshot(final String worldName) {
++        return this.snapshotManager.getSnapshot(worldName);
++    }
++
++    public void invalidateWorld(final String worldName) {
++        generationFor(worldName).incrementAndGet();
++        this.snapshotManager.clearWorld(worldName);
++        this.commitQueues.remove(worldName);
++    }
++
++    public void enqueueCommit(final String worldName, final long generationId, final Runnable commit) {
++        Objects.requireNonNull(commit, "commit");
++        if (generationId != currentGeneration(worldName)) {
++            return;
++        }
++        commitQueueFor(worldName).enqueue(commit);
++    }
++
++    public int drainCommits(final List<String> worldNames) {
++        Objects.requireNonNull(worldNames, "worldNames");
++        int total = 0;
++        for (final String worldName : worldNames) {
++            if (worldName == null) {
++                continue;
++            }
++            final CommitQueue queue = this.commitQueues.get(worldName);
++            if (queue != null) {
++                total += queue.drain();
++            }
++        }
++        return total;
++    }
++
++    private AtomicLong generationFor(final String worldName) {
++        Objects.requireNonNull(worldName, "worldName");
++        return this.generationsByWorld.computeIfAbsent(worldName, key -> new AtomicLong());
++    }
++
++    private CommitQueue commitQueueFor(final String worldName) {
++        Objects.requireNonNull(worldName, "worldName");
++        return this.commitQueues.computeIfAbsent(worldName, key -> new CommitQueue());
++    }
++
+     private ThreadPoolExecutor ensureExecutor() {
+         ThreadPoolExecutor current = this.executor;
+         if (current != null) {

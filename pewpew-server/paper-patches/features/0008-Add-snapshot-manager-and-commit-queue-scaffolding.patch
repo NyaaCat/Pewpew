@@ -35,7 +35,7 @@ index 0000000000000000000000000000000000000000..634741cfa40b0d49ec5883462fab2d04
 +}
 diff --git a/src/main/java/io/papermc/paper/pewpew/SnapshotManager.java b/src/main/java/io/papermc/paper/pewpew/SnapshotManager.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..b027563fa488af56a13e84f321b624dd4aea4df8
+index 0000000000000000000000000000000000000000..6b969a852880741ca60fe19a08b8f629fd923a44
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/pewpew/SnapshotManager.java
 @@ -0,0 +1,38 @@
@@ -49,10 +49,10 @@ index 0000000000000000000000000000000000000000..b027563fa488af56a13e84f321b624dd
 +public final class SnapshotManager {
 +    private final ConcurrentHashMap<String, Snapshot> snapshots = new ConcurrentHashMap<>();
 +
-+    public Snapshot buildSnapshot(final String worldName, final long tickId, final Map<String, Long> versionMarkers) {
++    public Snapshot buildSnapshot(final String worldName, final long tickId, final long generationId, final Map<String, Long> versionMarkers) {
 +        Objects.requireNonNull(worldName, "worldName");
 +        Objects.requireNonNull(versionMarkers, "versionMarkers");
-+        return new Snapshot(worldName, tickId, Collections.unmodifiableMap(Map.copyOf(versionMarkers)));
++        return new Snapshot(worldName, tickId, generationId, Collections.unmodifiableMap(Map.copyOf(versionMarkers)));
 +    }
 +
 +    public void publishSnapshot(final Snapshot snapshot) {
@@ -70,7 +70,7 @@ index 0000000000000000000000000000000000000000..b027563fa488af56a13e84f321b624dd
 +        this.snapshots.remove(worldName);
 +    }
 +
-+    public record Snapshot(String worldName, long tickId, Map<String, Long> versionMarkers) {
++    public record Snapshot(String worldName, long tickId, long generationId, Map<String, Long> versionMarkers) {
 +        public Snapshot {
 +            Objects.requireNonNull(worldName, "worldName");
 +            Objects.requireNonNull(versionMarkers, "versionMarkers");
@@ -149,7 +149,7 @@ index 0000000000000000000000000000000000000000..f3560bbfe69737345d32197d280f291a
 +}
 diff --git a/src/test/java/io/papermc/paper/pewpew/SnapshotManagerPerfTest.java b/src/test/java/io/papermc/paper/pewpew/SnapshotManagerPerfTest.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..3d922a56297da7253c00ae8372714d2e9895b76b
+index 0000000000000000000000000000000000000000..3e98f13b0b28e6a4b4f1be9a9d8676ec54a2bb8e
 --- /dev/null
 +++ b/src/test/java/io/papermc/paper/pewpew/SnapshotManagerPerfTest.java
 @@ -0,0 +1,34 @@
@@ -173,7 +173,7 @@ index 0000000000000000000000000000000000000000..3d922a56297da7253c00ae8372714d2e
 +        final int iterations = 50_000;
 +        final long start = System.nanoTime();
 +        for (int i = 0; i < iterations; i++) {
-+            SnapshotManager.Snapshot snapshot = manager.buildSnapshot("snapshot_perf_world", i, versions);
++            SnapshotManager.Snapshot snapshot = manager.buildSnapshot("snapshot_perf_world", i, i, versions);
 +            manager.publishSnapshot(snapshot);
 +        }
 +        final long durationNanos = System.nanoTime() - start;
@@ -189,7 +189,7 @@ index 0000000000000000000000000000000000000000..3d922a56297da7253c00ae8372714d2e
 +}
 diff --git a/src/test/java/io/papermc/paper/pewpew/SnapshotManagerTest.java b/src/test/java/io/papermc/paper/pewpew/SnapshotManagerTest.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..ca7c7732230daf1cc00797cab78db677891b8fa6
+index 0000000000000000000000000000000000000000..ac68dd2d927b4c63b588fd3bd08d0025587fe50c
 --- /dev/null
 +++ b/src/test/java/io/papermc/paper/pewpew/SnapshotManagerTest.java
 @@ -0,0 +1,30 @@
@@ -211,15 +211,15 @@ index 0000000000000000000000000000000000000000..ca7c7732230daf1cc00797cab78db677
 +        Map<String, Long> versions = new HashMap<>();
 +        versions.put("chunks", 1L);
 +
-+        SnapshotManager.Snapshot snapshot = manager.buildSnapshot("snapshot_world", 12L, versions);
++        SnapshotManager.Snapshot snapshot = manager.buildSnapshot("snapshot_world", 12L, 7L, versions);
 +        versions.put("chunks", 2L);
 +        manager.publishSnapshot(snapshot);
 +
 +        SnapshotManager.Snapshot stored = manager.getSnapshot("snapshot_world");
 +        assertEquals(12L, stored.tickId());
++        assertEquals(7L, stored.generationId());
 +        assertEquals(1L, stored.versionMarkers().get("chunks"));
 +
 +        manager.clearWorld("snapshot_world");
 +        assertNull(manager.getSnapshot("snapshot_world"));
 +    }
-+}

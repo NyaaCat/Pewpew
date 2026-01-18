@@ -4,28 +4,11 @@ Date: Sun, 18 Jan 2026 15:15:00 +0900
 Subject: [PATCH] Track per-world MSPT
 
 
-diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index 0000000..0000000 100644
---- a/net/minecraft/server/level/ServerLevel.java
-+++ b/net/minecraft/server/level/ServerLevel.java
-@@ -565,6 +565,12 @@
-     }
-     // Paper end - chunk tick iteration
- 
-+    // Pewpew start - track per-world MSPT
-+    public final MinecraftServer.TickTimes tickTimes5s = new MinecraftServer.TickTimes(100);
-+    public final MinecraftServer.TickTimes tickTimes10s = new MinecraftServer.TickTimes(200);
-+    public final MinecraftServer.TickTimes tickTimes1m = new MinecraftServer.TickTimes(1200);
-+    // Pewpew end
-+
-     public ServerLevel(
-         MinecraftServer server,
-         Executor dispatcher,
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 0000000..0000000 100644
+index d3bfee1b6d6da25a1e976c04ce5b3ab9b7a9370b..85dd0ac9ea637c7f070c9be6e679ca095664cd22 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1727,7 +1727,12 @@
+@@ -1728,7 +1728,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                      worldProfiler.push("tick");
  
                      try {
@@ -38,7 +21,7 @@ index 0000000..0000000 100644
                      } catch (Throwable var7) {
                          CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
                          serverLevel.fillReportDetails(crashReport);
-@@ -1765,7 +1770,12 @@
+@@ -1767,7 +1772,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                  profilerFiller.push("tick");
  
                  try {
@@ -51,3 +34,20 @@ index 0000000..0000000 100644
                  } catch (Throwable var7) {
                      CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
                      serverLevel.fillReportDetails(crashReport);
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index dda8d38ef61672cc714d9e5a475f9b0412ed5ff9..99043a48bada436fffe377891e8156fdb878f526 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -565,6 +565,12 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+     }
+     // Paper end - chunk tick iteration
+ 
++    // Pewpew start - track per-world MSPT
++    public final MinecraftServer.TickTimes tickTimes5s = new MinecraftServer.TickTimes(100);
++    public final MinecraftServer.TickTimes tickTimes10s = new MinecraftServer.TickTimes(200);
++    public final MinecraftServer.TickTimes tickTimes1m = new MinecraftServer.TickTimes(1200);
++    // Pewpew end
++
+     public ServerLevel(
+         MinecraftServer server,
+         Executor dispatcher,
