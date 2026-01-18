@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pewpew <pewpew@nyaa.cat>
+Date: Sun, 18 Jan 2026 15:15:00 +0900
+Subject: [PATCH] Track per-world MSPT
+
+
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -568,6 +568,12 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+     }
+     // Paper end - chunk tick iteration
+ 
++    // Pewpew start - track per-world MSPT
++    public final MinecraftServer.TickTimes tickTimes5s = new MinecraftServer.TickTimes(100);
++    public final MinecraftServer.TickTimes tickTimes10s = new MinecraftServer.TickTimes(200);
++    public final MinecraftServer.TickTimes tickTimes1m = new MinecraftServer.TickTimes(1200);
++    // Pewpew end
++
+     public ServerLevel(
+         MinecraftServer server,
+         Executor dispatcher,
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -1733,7 +1733,11 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                     worldProfiler.push("tick");
+ 
+                     try {
++                        long start = Util.getNanos(); // Pewpew - track per-world MSPT
+                         serverLevel.tick(hasTimeLeft);
++                        long elapsed = Util.getNanos() - start; // Pewpew - track per-world MSPT
++                        serverLevel.tickTimes5s.add(this.tickCount, elapsed);
++                        serverLevel.tickTimes10s.add(this.tickCount, elapsed);
++                        serverLevel.tickTimes1m.add(this.tickCount, elapsed);
+                     } catch (Throwable var7) {
+                         CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
+                         serverLevel.fillReportDetails(crashReport);
+@@ -1774,7 +1778,11 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                 profilerFiller.push("tick");
+ 
+                 try {
++                    long start = Util.getNanos(); // Pewpew - track per-world MSPT
+                     serverLevel.tick(hasTimeLeft);
++                    long elapsed = Util.getNanos() - start; // Pewpew - track per-world MSPT
++                    serverLevel.tickTimes5s.add(this.tickCount, elapsed);
++                    serverLevel.tickTimes10s.add(this.tickCount, elapsed);
++                    serverLevel.tickTimes1m.add(this.tickCount, elapsed);
+                 } catch (Throwable var7) {
+                     CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
+                     serverLevel.fillReportDetails(crashReport);
