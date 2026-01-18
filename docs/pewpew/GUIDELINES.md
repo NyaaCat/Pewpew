@@ -64,9 +64,14 @@ This file consolidates development requirements, best practices, and key notes.
 ## Patch workflow (strict)
 - Do not edit `pewpew-server/paper-patches` directly.
 - Do not edit `pewpew-server/minecraft-patches` directly.
-- Make changes under `paper-server/` (CraftBukkit/Paper) and `pewpew-server/src/minecraft/java` (NMS).
-- Export patches via Gradle: `./gradlew rebuildAllServerPatches`.
-- Keep patches minimal and derived only from the working trees.
+- Work in `tmp/` with a fresh, patched Paper source:
+  - Clone upstream Paper at the target version and run `./gradlew applyPatches` there.
+  - Apply Pewpew changes on top of the patched sources, then commit locally.
+  - Generate patches via `git format-patch` (or equivalent) from the tmp repo.
+  - Copy the resulting patch files into `pewpew-server/paper-patches` or `pewpew-server/minecraft-patches` as appropriate.
+- When building, apply Pewpew patches after all Paper patches (`./gradlew :pewpew-server:applyAllServerPatches`).
+- Rebuild the full patch series only when intentionally refreshing everything (`./gradlew rebuildAllServerPatches`).
+- Keep patches minimal and derived only from the patched working trees.
 
 ## Implementation best practices
 - Keep changes small, layered, and easy to bisect.

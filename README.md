@@ -10,11 +10,15 @@ any behavior-changing optimizations are opt-in and documented.
 - The current roadmap and invariants are in `docs/pewpew/plans/`.
 
 ## Patch workflow
-- Make code changes in `paper-server/` (CraftBukkit/Paper) and `pewpew-server/src/minecraft/java` (NMS).
-- Ensure sources are materialized with `./gradlew applyAllPatches` (or `./gradlew :pewpew-server:applyAllServerPatches`).
-- Prefer the smallest rebuild task needed (e.g. `./gradlew :pewpew-server:rebuildMinecraftFeaturePatches` or `./gradlew :pewpew-server:rebuildPaperServerFeaturePatches`).
-- Avoid `rebuildAllServerPatches` unless you intend to refresh the full patch series; if it churns patches, revert and apply the minimal diffs manually.
-- New files become file patches (`pewpew-server/paper-patches/files` or `pewpew-server/minecraft-patches/sources`); edits to existing sources become feature patches.
+- Do not edit `pewpew-server/paper-patches` or `pewpew-server/minecraft-patches` directly.
+- Work in `tmp/` with a fresh, patched Paper source:
+  1) Clone upstream Paper at the target version and run `./gradlew applyPatches`.
+  2) Apply Pewpew changes on top of the patched sources and commit locally.
+  3) Generate patches via `git format-patch` (or equivalent).
+  4) Copy the patch files into `pewpew-server/paper-patches` or `pewpew-server/minecraft-patches`.
+- Pewpew patches must apply after all Paper patches (`./gradlew :pewpew-server:applyAllServerPatches`).
+- Use the smallest rebuild task possible; only run `rebuildAllServerPatches` when intentionally refreshing the full series.
+- New files become file patches (`pewpew-server/paper-patches/files` or `pewpew-server/minecraft-patches/sources`).
 - `rebuildPaperServerFilePatches` may log a missing `src/main/resources/logo.png`; it is safe to ignore.
 
 ## Build

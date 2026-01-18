@@ -2,8 +2,10 @@
 
 These notes track significant changes and their patch export status.
 
-- Primary working trees: `paper-server/` (CraftBukkit/Paper) and `pewpew-server/src/minecraft/java/` (NMS).
-- Export patches with Gradle (`./gradlew rebuildAllServerPatches`).
+- Patch authoring happens in `tmp/` against a fresh, patched Paper source; commit there and export patches via `git format-patch`.
+- Copy the exported patch files into `pewpew-server/paper-patches` and `pewpew-server/minecraft-patches`.
+- Pewpew patches apply after Paper patches (`./gradlew :pewpew-server:applyAllServerPatches`).
+- Rebuild the full patch series only when intentionally refreshing (`./gradlew rebuildAllServerPatches`).
 
 ## Rebrand to Pewpew
 - Default brand id/name now resolves to Pewpew via build info and manifest attributes.

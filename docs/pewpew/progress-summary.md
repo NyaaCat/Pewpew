@@ -1,6 +1,11 @@
 # Pewpew Progress Summary
 
 ## Completed work
+- Restored clean patch-rebuild state by aborting stray `git am` sessions in `paper-server` and `pewpew-server/src/minecraft/java`.
+- Regenerated Pewpew patch series from patched sources and fixed patch numbering/renames.
+- Added commit-queue support to `WorldTickCoordinator` and synchronized `MapIndex#getNextMapId`.
+- Restored CraftBukkit thread-local safety: sapling tree type, source block override, and block-entity snapshot disable; updated Sculk catalyst and CraftBlock usages.
+- Re-applied patches and verified `./gradlew build` succeeds after test fixes.
 - Rescanned `docs/pewpew` docs + SparklyPaper notes and integrated findings into plans and risks.
 - Ported SparklyPaper parallel-world safety changes and fixes:
   - Per-world `TickThread` checks with richer diagnostics and hard-throw toggle.
@@ -82,10 +87,11 @@
 - Bench harness now can capture `jcmd` system properties and thread snapshots (Pewpew async/tick threads) via `BENCH_THREAD_SNAPSHOT=1`.
 - Normalized SparklyPaper-derived patch files (block entity tickers, ServerEntity delta, per-world MSPT) and removed obsolete patch-context fix.
 - Fixed Pewpew config + MSPT command patch headers; `:pewpew-server:applyAllServerPatches` now succeeds.
+- Updated patch workflow docs to use tmp-based patched sources and to apply Pewpew patches after Paper patches.
 
 ## Build / test status
-- `./gradlew :pewpew-server:test` succeeded (warnings only).
-- `./gradlew build` initially failed because `junit-platform-launcher` had no version; fixed by pinning `1.12.2` in root `build.gradle.kts`, then build succeeded.
+- `./gradlew build` succeeds (warnings about deprecated APIs only).
+- `./gradlew :pewpew-server:applyAllServerPatches` succeeds after patch regeneration.
 
 ## Bench / perf status
 - `scripts/bench/run_benchmark.sh` succeeded and generated:
@@ -99,7 +105,9 @@
   - `docs/pewpew/findings/multiverse-bench-report.md`
 
 ## Planned next steps
-1) Run A/B benchmarks: per-world ticking only vs baseline, plus async path/sensor with higher worker counts.
-2) Analyze profiler-v23/v24 hotspots and plan snapshot/async optimizations (including mob spawn ticking).
-3) Investigate redstone anomalies under parallel ticking and confirm tick-thread safety.
-4) After current benchmarks, investigate chunk/block-state access performance and feasibility of off-thread entity tick/snapshot optimizations.
+1) Clean tmp Paper sources, regenerate patches from a fresh patched source, and re-run build + tests to validate patch application.
+2) Fix async pathfinding/sensor snapshot workflow end-to-end (commit queue, generation validation, pathfinding context compatibility).
+3) Verify per-world ticking performance vs baseline, then scale async worker counts and capture thread snapshots.
+4) Investigate redstone anomalies under parallel ticking and confirm tick-thread safety.
+5) Review SparklyPaper 1.21.8→1.21.11 changes for adoptable optimizations.
+6) After current benchmarks, investigate chunk/block-state access costs and feasibility of off-thread entity tick/snapshot optimizations.
