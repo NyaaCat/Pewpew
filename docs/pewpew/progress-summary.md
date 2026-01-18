@@ -80,6 +80,7 @@
 - Committed each patch file separately and moved branch to `version/1.21.8`.
 - Updated root `README.md` with the minimal patch workflow and the safe-to-ignore `logo.png` warning.
 - Bench harness now can capture `jcmd` system properties and thread snapshots (Pewpew async/tick threads) via `BENCH_THREAD_SNAPSHOT=1`.
+- Normalized SparklyPaper-derived patch files (block entity tickers, ServerEntity delta, per-world MSPT) and removed obsolete patch-context fix.
 
 ## Build / test status
 - `./gradlew :pewpew-server:test` succeeded (warnings only).
@@ -100,3 +101,4 @@
 1) Run A/B benchmarks: per-world ticking only vs baseline, plus async path/sensor with higher worker counts.
 2) Analyze profiler-v23/v24 hotspots and plan snapshot/async optimizations (including mob spawn ticking).
 3) Investigate redstone anomalies under parallel ticking and confirm tick-thread safety.
+4) After current benchmarks, investigate chunk/block-state access performance and feasibility of off-thread entity tick/snapshot optimizations.
