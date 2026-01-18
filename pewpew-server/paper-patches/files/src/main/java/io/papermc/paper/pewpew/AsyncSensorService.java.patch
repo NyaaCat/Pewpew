@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/pewpew/AsyncSensorService.java
-@@ -1,0 +_,334 @@
+@@ -1,0 +_,312 @@
 +package io.papermc.paper.pewpew;
 +
 +import java.util.ArrayList;
@@ -72,17 +72,17 @@
 +        }
 +        init();
 +        final UUID ownerId = owner.getUUID();
++        final double originX = owner.getX();
++        final double originY = owner.getY();
++        final double originZ = owner.getZ();
 +        final List<EntitySnapshot> snapshots = new ArrayList<>(candidates.size());
 +        for (LivingEntity candidate : candidates) {
-+            snapshots.add(EntitySnapshot.from(candidate));
++            snapshots.add(EntitySnapshot.from(candidate, originX, originY, originZ));
 +        }
 +        final PendingLivingTask task = new PendingLivingTask(
 +            level,
 +            ownerId,
 +            owner.blockPosition(),
-+            owner.getX(),
-+            owner.getY(),
-+            owner.getZ(),
 +            snapshots,
 +            followRange,
 +            WorldTickCoordinator.get().currentGeneration(level.getWorld().getName())
@@ -110,17 +110,17 @@
 +        }
 +        init();
 +        final UUID ownerId = owner.getUUID();
++        final double originX = owner.getX();
++        final double originY = owner.getY();
++        final double originZ = owner.getZ();
 +        final List<EntitySnapshot> snapshots = new ArrayList<>(candidates.size());
 +        for (Player candidate : candidates) {
-+            snapshots.add(EntitySnapshot.from(candidate));
++            snapshots.add(EntitySnapshot.from(candidate, originX, originY, originZ));
 +        }
 +        final PendingPlayerTask task = new PendingPlayerTask(
 +            level,
 +            ownerId,
 +            owner.blockPosition(),
-+            owner.getX(),
-+            owner.getY(),
-+            owner.getZ(),
 +            snapshots,
 +            followRange,
 +            WorldTickCoordinator.get().currentGeneration(level.getWorld().getName())
@@ -146,19 +146,22 @@
 +
 +    private static final class EntitySnapshot {
 +        private final UUID id;
-+        private final double x;
-+        private final double y;
-+        private final double z;
++        private final double distanceSq;
 +
-+        private EntitySnapshot(UUID id, double x, double y, double z) {
++        private EntitySnapshot(UUID id, double distanceSq) {
 +            this.id = id;
-+            this.x = x;
-+            this.y = y;
-+            this.z = z;
++            this.distanceSq = distanceSq;
 +        }
 +
-+        private static EntitySnapshot from(Entity entity) {
-+            return new EntitySnapshot(entity.getUUID(), entity.getX(), entity.getY(), entity.getZ());
++        private static EntitySnapshot from(Entity entity, double originX, double originY, double originZ) {
++            double dx = entity.getX() - originX;
++            double dy = entity.getY() - originY;
++            double dz = entity.getZ() - originZ;
++            return new EntitySnapshot(entity.getUUID(), dx * dx + dy * dy + dz * dz);
++        }
++
++        private double distanceSq() {
++            return this.distanceSq;
 +        }
 +    }
 +
@@ -168,9 +171,6 @@
 +        protected final UUID ownerId;
 +        protected final net.minecraft.core.BlockPos originPos;
 +        protected final List<EntitySnapshot> candidates;
-+        protected final double originX;
-+        protected final double originY;
-+        protected final double originZ;
 +        protected final double followRange;
 +        protected final long generationId;
 +
@@ -178,9 +178,6 @@
 +            ServerLevel level,
 +            UUID ownerId,
 +            net.minecraft.core.BlockPos originPos,
-+            double originX,
-+            double originY,
-+            double originZ,
 +            List<EntitySnapshot> candidates,
 +            double followRange,
 +            long generationId
@@ -189,31 +186,18 @@
 +            this.worldName = level.getWorld().getName();
 +            this.ownerId = ownerId;
 +            this.originPos = originPos;
-+            this.originX = originX;
-+            this.originY = originY;
-+            this.originZ = originZ;
 +            this.candidates = candidates;
 +            this.followRange = followRange;
 +            this.generationId = generationId;
 +        }
 +
 +        protected List<UUID> sortedCandidateIds() {
-+            List<EntityDistance> distances = new ArrayList<>(this.candidates.size());
++            this.candidates.sort(Comparator.comparingDouble(EntitySnapshot::distanceSq));
++            List<UUID> ids = new ArrayList<>(this.candidates.size());
 +            for (EntitySnapshot snapshot : this.candidates) {
-+                double dx = snapshot.x - this.originX;
-+                double dy = snapshot.y - this.originY;
-+                double dz = snapshot.z - this.originZ;
-+                distances.add(new EntityDistance(snapshot.id, dx * dx + dy * dy + dz * dz));
-+            }
-+            distances.sort(Comparator.comparingDouble(EntityDistance::distanceSq));
-+            List<UUID> ids = new ArrayList<>(distances.size());
-+            for (EntityDistance distance : distances) {
-+                ids.add(distance.id);
++                ids.add(snapshot.id);
 +            }
 +            return ids;
-+        }
-+
-+        protected record EntityDistance(UUID id, double distanceSq) {
 +        }
 +    }
 +
@@ -222,14 +206,11 @@
 +            ServerLevel level,
 +            UUID ownerId,
 +            net.minecraft.core.BlockPos originPos,
-+            double originX,
-+            double originY,
-+            double originZ,
 +            List<EntitySnapshot> candidates,
 +            double followRange,
 +            long generationId
 +        ) {
-+            super(level, ownerId, originPos, originX, originY, originZ, candidates, followRange, generationId);
++            super(level, ownerId, originPos, candidates, followRange, generationId);
 +        }
 +
 +        private void runAsync() {
@@ -274,14 +255,11 @@
 +            ServerLevel level,
 +            UUID ownerId,
 +            net.minecraft.core.BlockPos originPos,
-+            double originX,
-+            double originY,
-+            double originZ,
 +            List<EntitySnapshot> candidates,
 +            double followRange,
 +            long generationId
 +        ) {
-+            super(level, ownerId, originPos, originX, originY, originZ, candidates, followRange, generationId);
++            super(level, ownerId, originPos, candidates, followRange, generationId);
 +        }
 +
 +        private void runAsync() {
