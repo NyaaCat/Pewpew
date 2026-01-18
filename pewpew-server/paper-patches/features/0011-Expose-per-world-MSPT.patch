@@ -8,7 +8,7 @@ diff --git a/src/main/java/io/papermc/paper/command/MSPTCommand.java b/src/main/
 index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
 --- a/src/main/java/io/papermc/paper/command/MSPTCommand.java
 +++ b/src/main/java/io/papermc/paper/command/MSPTCommand.java
-@@ -1,6 +1,7 @@
+@@ -1,7 +1,8 @@
  package io.papermc.paper.command;
  
  import net.kyori.adventure.text.Component;
@@ -17,7 +17,7 @@ index 0000000000000000000000000000000000000000..00000000000000000000000000000000
  import org.bukkit.Location;
  import org.bukkit.command.Command;
  import org.bukkit.command.CommandSender;
-@@ -67,6 +68,21 @@ public final class MSPTCommand extends Command {
+@@ -67,6 +68,23 @@ public final class MSPTCommand extends Command {
                      times.get(6), SLASH, times.get(7), SLASH, times.get(8)
                  )
              )
