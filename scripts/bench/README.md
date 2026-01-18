@@ -1,0 +1,65 @@
+# Pewpew Bench Harness
+
+This harness runs a vanilla Paper baseline against Pewpew using the same seed,
+bot load, and bench plugin configuration.
+
+Default scenario:
+- 10 bots/players to keep chunks loaded.
+- 10 cells by default (one per bot) unless `BENCH_CELLS` overrides it.
+- 40 villagers + 40 hostiles per cell, with job sites rotating every 20 ticks.
+- Day/night phases every 2400 ticks to exercise villager work + night mob AI.
+
+Quick start:
+- `bash scripts/bench/run_benchmark.sh`
+- `bash scripts/bench/run_multiverse_benchmark.sh`
+
+Environment overrides:
+- `BENCH_BASELINE_REPO` (default: `/home/phoenix/works/pewpew-paper-baseline`)
+- `BENCH_PLUGIN_REPO` (default: `/home/phoenix/works/pewpew-bench-plugin`)
+- `BENCH_PLUGIN_API_COORDS` (override API coords for the bench plugin build)
+- `BENCH_RUN_ID` (override the unique run directory name)
+- `BENCH_KEEP_RUN_DIR=1` (keep the run directory for debugging)
+- `BENCH_SKIP_PEWPEW_API_PUBLISH=1` (skip publishing `pewpew-api` to Maven local)
+- `BENCH_SKIP_BASELINE=1` (skip baseline run if a baseline summary exists)
+- `BENCH_BASELINE_SUMMARY` (path to an existing baseline summary when skipping baseline)
+- `BENCH_SEED`, `BENCH_CELLS`, `BENCH_BOT_COUNT`
+- `BENCH_VILLAGERS_PER_CELL`, `BENCH_HOSTILES_PER_CELL`
+- `BENCH_WARMUP_TICKS`, `BENCH_SAMPLE_TICKS`, `BENCH_PHASE_TICKS`
+- `BENCH_SAMPLE_INTERVAL_TICKS`, `BENCH_JOB_ROTATE_TICKS`
+- `BENCH_HOSTILE_RETARGET_TICKS`, `BENCH_ENTITY_MAINT_TICKS`
+- `BENCH_EXPECTED_TPS` (controls run duration; defaults to 15)
+- `BENCH_PEWPEW_JAVA_OPTS` (default: `-Dpewpew.asyncPathfinding=true -Dpewpew.asyncSensors=true`)
+- `BENCH_PEWPEW_FEATURE_ASYNC_PATHFINDING` (default: `true`)
+- `BENCH_PEWPEW_FEATURE_ASYNC_SENSORS` (default: `true`)
+- `BENCH_PEWPEW_FEATURE_WORLD_TICK_COORDINATOR` (default: `false`)
+- `BENCH_PEWPEW_FEATURE_WORLD_TICK_COORDINATOR_TESTING` (default: `false`)
+- `BENCH_PEWPEW_FEATURE_ASYNC_POOL_TESTING` (default: `false`)
+- `BENCH_PEWPEW_FEATURE_TICK_THREAD_HARD_THROW` (default: `true`)
+- `BENCH_PEWPEW_ASYNC_POOL_WORKERS` (default: `-1` for default)
+- `BENCH_PEWPEW_ASYNC_POOL_QUEUE_LIMIT` (default: `-1` for default)
+- `BENCH_PEWPEW_WORLD_TICK_WORKERS` (default: `-1` for default)
+- `BENCH_PEWPEW_WORLD_TICK_STALL_NANOS` (default: `50000000`)
+
+Multiworld overrides (run_multiverse_benchmark.sh):
+- `MULTIVERSE_JAR_URL` (defaults to Multiverse-Core 5.5.0)
+- `BENCH_PLAYERS_PER_WORLD`, `BENCH_PLAYER_SPACING`
+- `BENCH_VILLAGERS_PER_PLAYER`, `BENCH_HOSTILES_PER_PLAYER`
+- `BENCH_VILLAGER_SPAWN_RADIUS`, `BENCH_HOSTILE_SPAWN_RADIUS`
+- `BENCH_VILLAGER_SYNC_RADIUS`
+- `BENCH_VILLAGE_OFFSET`, `BENCH_EFFECT_AMPLIFIER`
+- `BENCH_EFFECT_DURATION_TICKS`, `BENCH_EFFECT_REFRESH_TICKS` (defaults: 24000/20)
+- `BENCH_VILLAGER_MAINT_TICKS`, `BENCH_VILLAGE_PLACE_DELAY_TICKS`
+- `BENCH_POST_VILLAGE_DELAY_TICKS`
+- `BENCH_TELEPORT_DELAY_TICKS`
+
+Stress profile notes:
+- Job-site rotation forces villager AcquirePoi churn (pathfinding hot path).
+- Hostile retargeting keeps pathfinding + sensing active around players.
+- If you want one player per cell (max spread), set `BENCH_CELLS=10` (and adjust per-cell mob counts if needed).
+
+Outputs:
+- `docs/pewpew/findings/bench-baseline.json`
+- `docs/pewpew/findings/bench-compare.json`
+- `docs/pewpew/findings/perf-bench-report.md`
+- `docs/pewpew/findings/multiverse-bench-summary.json`
+- `docs/pewpew/findings/multiverse-bench-report.md`
