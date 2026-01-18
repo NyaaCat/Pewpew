@@ -79,6 +79,7 @@
   - Per-world MSPT tracking and `/mspt` world breakdown.
 - Committed each patch file separately and moved branch to `version/1.21.8`.
 - Updated root `README.md` with the minimal patch workflow and the safe-to-ignore `logo.png` warning.
+- Bench harness now can capture `jcmd` system properties and thread snapshots (Pewpew async/tick threads) via `BENCH_THREAD_SNAPSHOT=1`.
 
 ## Build / test status
 - `./gradlew :pewpew-server:test` succeeded (warnings only).

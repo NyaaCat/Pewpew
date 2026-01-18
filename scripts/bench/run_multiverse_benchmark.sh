@@ -40,6 +40,9 @@ BENCH_PROFILE_FORMAT="${BENCH_PROFILE_FORMAT:-text}"
 BENCH_PROFILE_ARGS="${BENCH_PROFILE_ARGS:-}"
 BENCH_PROFILE_START_TIMEOUT="${BENCH_PROFILE_START_TIMEOUT:-600}"
 BENCH_PROFILE_LOG_PATTERN="${BENCH_PROFILE_LOG_PATTERN:-Villages and entities ready; benchmarking can begin.}"
+BENCH_THREAD_SNAPSHOT="${BENCH_THREAD_SNAPSHOT:-0}"
+BENCH_THREAD_SNAPSHOT_DELAY="${BENCH_THREAD_SNAPSHOT_DELAY:-10}"
+BENCH_THREAD_SNAPSHOT_PATTERN="${BENCH_THREAD_SNAPSHOT_PATTERN:-Pewpew-(Async|Tick)-}"
 
 RUN_ID="${BENCH_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
 RUN_ROOT="$ROOT_DIR/tmp/bench/runs/$RUN_ID-multiworld"
@@ -235,6 +238,42 @@ function resolve_server_java_pid() {
     return 1
 }
 
+function capture_pewpew_properties() {
+    local label="$1"
+    if [ "$BENCH_THREAD_SNAPSHOT" != "1" ]; then
+        return
+    fi
+    if [ -z "$SERVER_JAVA_PID" ]; then
+        return
+    fi
+    local out_dir="$RUN_ROOT/thread-snapshots"
+    mkdir -p "$out_dir"
+    local out_file="$out_dir/${RUN_ID}-${label}-pewpew-properties.txt"
+    if command -v rg >/dev/null 2>&1; then
+        jcmd "$SERVER_JAVA_PID" VM.system_properties 2>/dev/null | rg -n "pewpew\\." > "$out_file" || true
+    else
+        jcmd "$SERVER_JAVA_PID" VM.system_properties 2>/dev/null | grep -E "pewpew\\." > "$out_file" || true
+    fi
+}
+
+function capture_thread_snapshot() {
+    local label="$1"
+    if [ "$BENCH_THREAD_SNAPSHOT" != "1" ]; then
+        return
+    fi
+    if [ -z "$SERVER_JAVA_PID" ]; then
+        return
+    fi
+    local out_dir="$RUN_ROOT/thread-snapshots"
+    mkdir -p "$out_dir"
+    local out_file="$out_dir/${RUN_ID}-${label}-threads.txt"
+    if command -v rg >/dev/null 2>&1; then
+        jcmd "$SERVER_JAVA_PID" Thread.print 2>/dev/null | rg -n "\"${BENCH_THREAD_SNAPSHOT_PATTERN}" > "$out_file" || true
+    else
+        jcmd "$SERVER_JAVA_PID" Thread.print 2>/dev/null | grep -E "\"${BENCH_THREAD_SNAPSHOT_PATTERN}" > "$out_file" || true
+    fi
+}
+
 function start_profiler() {
     local label="$1"
     local output_dir="$BENCH_PROFILE_OUTPUT_DIR"
@@ -424,6 +463,7 @@ function run_server() {
     SERVER_JAVA_PID=""
     if resolve_server_java_pid "$run_dir"; then
         echo "Resolved server Java PID: $SERVER_JAVA_PID"
+        capture_pewpew_properties "$profile_label"
     else
         echo "Failed to resolve server Java PID for $run_dir"
     fi
@@ -436,6 +476,10 @@ function run_server() {
     echo "Spawning $BOT_COUNT bots for $RUN_SECONDS seconds"
     node "$ROOT_DIR/scripts/bench/bots.js" --count "$BOT_COUNT" --duration "$RUN_SECONDS" >/dev/null 2>&1 &
     local bot_pid=$!
+    if [ "$BENCH_THREAD_SNAPSHOT" = "1" ]; then
+        sleep "$BENCH_THREAD_SNAPSHOT_DELAY"
+        capture_thread_snapshot "$profile_label"
+    fi
 
     PROFILER_PID=""
     if should_profile "$profile_label"; then
