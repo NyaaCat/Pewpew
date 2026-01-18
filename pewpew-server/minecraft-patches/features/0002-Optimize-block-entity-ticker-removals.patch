@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Pewpew <pewpew@nyaa.cat>
+Date: Sun, 18 Jan 2026 15:10:00 +0900
+Subject: [PATCH] Optimize block entity ticker removals
+
+
+diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
+index 0000000000000000000000000000000000000000..0000000000000000000000000000000000000000 100644
+--- a/net/minecraft/world/level/Level.java
++++ b/net/minecraft/world/level/Level.java
+@@ -109,7 +109,7 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
+     );
+-    public final List<TickingBlockEntity> blockEntityTickers = Lists.newArrayList();
++    public final io.papermc.paper.pewpew.BlockEntityTickersList blockEntityTickers = new io.papermc.paper.pewpew.BlockEntityTickersList(); // Pewpew - optimize block entity removals
+     protected final CollectingNeighborUpdater neighborUpdater;
+     private final List<TickingBlockEntity> pendingBlockEntityTickers = Lists.newArrayList();
+     private boolean tickingBlockEntities;
+@@ -1463,8 +1463,6 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
+ 
+         int tickedEntities = 0; // Paper - rewrite chunk system
+-        var toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<TickingBlockEntity>(); // Paper - Fix MC-117075; use removeAll
+-        toRemove.add(null); // Paper - Fix MC-117075
+         for (this.tileTickPosition = 0; this.tileTickPosition < this.blockEntityTickers.size(); this.tileTickPosition++) { // Paper - Disable tick limiters
+             TickingBlockEntity tickingBlockEntity = this.blockEntityTickers.get(this.tileTickPosition);
+             // Spigot end
+             if (tickingBlockEntity.isRemoved()) {
+-                toRemove.add(tickingBlockEntity); // Paper - Fix MC-117075; use removeAll
++                this.blockEntityTickers.markAsRemoved(this.tileTickPosition); // Pewpew - optimize block entity removals
+             } else if (runsNormally && this.shouldTickBlocksAt(tickingBlockEntity.getPos())) {
+                 tickingBlockEntity.tick();
+@@ -1479,7 +1477,7 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
+                 }
+                 // Paper end - rewrite chunk system
+             }
+         }
+-        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075
++        this.blockEntityTickers.removeMarkedEntries(); // Pewpew - optimize block entity removals
+ 
+         this.tickingBlockEntities = false;
+         profilerFiller.pop();
