@@ -185,10 +185,10 @@
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
 2) Validate villager AI behavior under live gameplay and decide whether to default monster sync fallback to false.
-3) Run A/B benchmarks for spawn snapshot cache (on/off) and quantify spawn tick impact.
-4) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
-5) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
-6) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
-7) Stabilize 64-bot production profiling by reducing chunk/network load (e.g., lower view/simulation distance, slower joins, or split bot processes), then re-run off/on profiles.
-8) Draft and execute a surgical optimization plan from the production profiles, focused on low-level block-state/biome/player-distance hot paths in natural spawning and block-entity ticking.
-9) Move to step 3 (precompute nearest player distance for spawn) and re-profile to confirm `EntityGetter.getNearestPlayer` drops inside spawn loops.
+3) Re-profile step 3 with 16 bots to confirm nearest-player scan drops in spawn loops and record the delta.
+4) Run A/B benchmarks for spawn snapshot cache (on/off) and quantify spawn tick impact.
+5) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
+6) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
+7) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
+8) Stabilize 64-bot production profiling by reducing chunk/network load (e.g., lower view/simulation distance, slower joins, or split bot processes), then re-run off/on profiles.
+9) Draft and execute the next surgical optimization (block-entity ticking/hoppers) once spawn-path deltas are confirmed.
