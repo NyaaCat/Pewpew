@@ -1,0 +1,456 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix <w@m.ac>
+Date: Sun, 19 Jan 2026 01:25:00 +0900
+Subject: [PATCH] Pin world tick workers and prefer dedicated worlds
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index 660041d..c2385d6 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -1,17 +1,19 @@
+ package io.papermc.paper.pewpew;
+ 
+ import ca.spottedleaf.moonrise.common.util.TickThread;
++import java.util.ArrayList;
+ import java.util.Collections;
++import java.util.Iterator;
+ import java.util.LinkedHashMap;
++import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Objects;
++import java.util.Set;
++import java.util.concurrent.BlockingQueue;
+ import java.util.concurrent.ConcurrentHashMap;
+ import java.util.concurrent.CountDownLatch;
+ import java.util.concurrent.LinkedBlockingQueue;
+-import java.util.concurrent.RejectedExecutionException;
+-import java.util.concurrent.ThreadFactory;
+-import java.util.concurrent.ThreadPoolExecutor;
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicBoolean;
+ import java.util.concurrent.atomic.AtomicInteger;
+@@ -24,6 +26,7 @@ public final class WorldTickCoordinator {
+     private static final String TESTING_PROPERTY = "pewpew.worldTickCoordinator.testing";
+     private static final String STALL_THRESHOLD_PROPERTY = "pewpew.worldTickCoordinator.stallThresholdNanos";
+     private static final String WORKER_COUNT_PROPERTY = "pewpew.worldTickCoordinator.workers";
++    private static final String DEDICATED_WORLDS_PROPERTY = "pewpew.worldTickCoordinator.dedicatedWorlds";
+     private static final long DEFAULT_STALL_THRESHOLD_NANOS = 50_000_000L;
+     private static final String THREAD_NAME_PREFIX = "Pewpew-Tick-";
+ 
+@@ -35,11 +38,14 @@ public final class WorldTickCoordinator {
+     private final AtomicLong maxStallNanos = new AtomicLong();
+     private final AtomicInteger threadIds = new AtomicInteger();
+     private final AtomicReference<TickBarrier> inFlightBarrier = new AtomicReference<>();
+-    private final Object executorLock = new Object();
+-    private volatile ThreadPoolExecutor executor;
++    private final Object workerLock = new Object();
+     private final SnapshotManager snapshotManager = new SnapshotManager();
+     private final ConcurrentHashMap<String, CommitQueue> commitQueues = new ConcurrentHashMap<>();
+     private final ConcurrentHashMap<String, AtomicLong> generationsByWorld = new ConcurrentHashMap<>();
++    private final Map<String, WorldTickWorker> worldAssignments = new LinkedHashMap<>();
++    private volatile List<WorldTickWorker> workers = List.of();
++    private volatile String dedicatedWorldsRaw = "";
++    private volatile Set<String> dedicatedWorlds = Set.of();
+ 
+     private WorldTickCoordinator() {
+     }
+@@ -63,7 +69,7 @@ public final class WorldTickCoordinator {
+         if (!this.initialized.compareAndSet(false, true)) {
+             return;
+         }
+-        this.executor = createExecutor();
++        refreshDedicatedWorlds();
+     }
+ 
+     public TickBarrier dispatchWorldTicks(final Map<String, Runnable> worldTasks) {
+@@ -76,8 +82,8 @@ public final class WorldTickCoordinator {
+             return TickBarrier.completed();
+         }
+         init();
+-        final ThreadPoolExecutor localExecutor = ensureExecutor();
+-        if (localExecutor == null) {
++        final Map<String, WorldTickWorker> assignments = assignWorlds(worldTasks.keySet());
++        if (assignments.isEmpty()) {
+             runInline(worldTasks);
+             return TickBarrier.completed();
+         }
+@@ -86,12 +92,12 @@ public final class WorldTickCoordinator {
+         for (final Map.Entry<String, Runnable> entry : worldTasks.entrySet()) {
+             final String worldName = Objects.requireNonNull(entry.getKey(), "worldName");
+             final Runnable task = Objects.requireNonNull(entry.getValue(), "task");
+-            try {
+-                localExecutor.execute(() -> runWorldTask(barrier, worldName, task));
+-            } catch (final RejectedExecutionException rejected) {
++            final WorldTickWorker worker = assignments.get(worldName);
++            if (worker == null || !worker.enqueue(() -> runWorldTask(barrier, worldName, task))) {
+                 runWorldTask(barrier, worldName, task);
++                continue;
+             }
+-            recordQueueDepth(worldName, localExecutor.getQueue().size());
++            recordQueueDepth(worldName, worker.queueSize());
+         }
+         return barrier;
+     }
+@@ -105,12 +111,15 @@ public final class WorldTickCoordinator {
+     }
+ 
+     public void shutdownForTesting() {
+-        final ThreadPoolExecutor localExecutor = this.executor;
+-        if (localExecutor == null) {
+-            return;
++        synchronized (this.workerLock) {
++            for (final WorldTickWorker worker : this.workers) {
++                worker.shutdown();
++            }
++            this.workers = List.of();
++            this.worldAssignments.clear();
++            this.dedicatedWorlds = Set.of();
++            this.dedicatedWorldsRaw = "";
+         }
+-        localExecutor.shutdownNow();
+-        this.executor = null;
+         this.initialized.set(false);
+     }
+ 
+@@ -227,47 +236,169 @@ public final class WorldTickCoordinator {
+         return this.commitQueues.computeIfAbsent(worldName, key -> new CommitQueue());
+     }
+ 
+-    private ThreadPoolExecutor ensureExecutor() {
+-        ThreadPoolExecutor current = this.executor;
+-        if (current != null) {
+-            return current;
++    private Map<String, WorldTickWorker> assignWorlds(final Set<String> worldNames) {
++        if (worldNames.isEmpty()) {
++            return Collections.emptyMap();
++        }
++        final Map<String, WorldTickWorker> assignments = new LinkedHashMap<>();
++        synchronized (this.workerLock) {
++            final Set<String> dedicated = refreshDedicatedWorlds();
++            pruneAssignments(worldNames, dedicated);
++            ensureWorkers(worldNames.size());
++            for (final String worldName : worldNames) {
++                WorldTickWorker worker = this.worldAssignments.get(worldName);
++                if (worker == null) {
++                    final boolean dedicatedWorld = dedicated.contains(worldName);
++                    worker = selectWorker(dedicatedWorld);
++                    if (worker == null) {
++                        continue;
++                    }
++                    this.worldAssignments.put(worldName, worker);
++                    worker.assignWorld(worldName, dedicatedWorld);
++                }
++                assignments.put(worldName, worker);
++            }
++        }
++        return assignments;
++    }
++
++    private void pruneAssignments(final Set<String> worldNames, final Set<String> dedicated) {
++        final Iterator<Map.Entry<String, WorldTickWorker>> iterator = this.worldAssignments.entrySet().iterator();
++        while (iterator.hasNext()) {
++            final Map.Entry<String, WorldTickWorker> entry = iterator.next();
++            if (worldNames.contains(entry.getKey())) {
++                continue;
++            }
++            final WorldTickWorker worker = entry.getValue();
++            worker.removeWorld(entry.getKey(), dedicated.contains(entry.getKey()));
++            iterator.remove();
++        }
++    }
++
++    private void ensureWorkers(final int worldCount) {
++        final int desired = desiredWorkerCount(worldCount);
++        if (desired <= 0) {
++            return;
+         }
+-        synchronized (this.executorLock) {
+-            current = this.executor;
+-            if (current != null) {
+-                return current;
++        List<WorldTickWorker> localWorkers = new ArrayList<>(this.workers);
++        final int current = localWorkers.size();
++        if (current < desired) {
++            final boolean daemon = Boolean.getBoolean(TESTING_PROPERTY);
++            for (int i = current; i < desired; i++) {
++                localWorkers.add(new WorldTickWorker(this.threadIds.incrementAndGet(), daemon));
+             }
+-            if (!isActive()) {
+-                return null;
++        }
++        if (localWorkers.size() > desired) {
++            for (int i = localWorkers.size() - 1; i >= 0 && localWorkers.size() > desired; i--) {
++                final WorldTickWorker worker = localWorkers.get(i);
++                if (worker.hasWorlds()) {
++                    continue;
++                }
++                worker.shutdown();
++                localWorkers.remove(i);
+             }
+-            current = createExecutor();
+-            this.executor = current;
+-            return current;
+         }
++        this.workers = List.copyOf(localWorkers);
+     }
+ 
+-    private ThreadPoolExecutor createExecutor() {
+-        final int workers = Math.max(1, Integer.getInteger(
++    private int desiredWorkerCount(final int worldCount) {
++        final int maxWorkers = Math.max(1, Integer.getInteger(
+             WORKER_COUNT_PROPERTY,
+             Math.max(1, Runtime.getRuntime().availableProcessors() - 1)
+         ));
+-        final ThreadFactory factory = runnable -> {
+-            final Thread thread = new TickThread(runnable, THREAD_NAME_PREFIX + this.threadIds.incrementAndGet());
+-            if (Boolean.getBoolean(TESTING_PROPERTY)) {
+-                thread.setDaemon(true);
+-            }
+-            return thread;
+-        };
+-        final ThreadPoolExecutor pool = new ThreadPoolExecutor(
+-            workers,
+-            workers,
+-            0L,
+-            TimeUnit.MILLISECONDS,
+-            new LinkedBlockingQueue<>(),
+-            factory
+-        );
+-        pool.prestartAllCoreThreads();
+-        return pool;
++        return Math.max(1, Math.min(maxWorkers, worldCount));
++    }
++
++    private Set<String> refreshDedicatedWorlds() {
++        final String raw = System.getProperty(DEDICATED_WORLDS_PROPERTY, "");
++        if (raw.equals(this.dedicatedWorldsRaw)) {
++            return this.dedicatedWorlds;
++        }
++        final Set<String> parsed = parseDedicatedWorlds(raw);
++        this.dedicatedWorldsRaw = raw;
++        this.dedicatedWorlds = parsed;
++        for (final WorldTickWorker worker : this.workers) {
++            worker.recalculateDedicatedWorlds(parsed);
++        }
++        return parsed;
++    }
++
++    private static Set<String> parseDedicatedWorlds(final String raw) {
++        if (raw == null || raw.isBlank()) {
++            return Set.of();
++        }
++        final Set<String> worlds = new LinkedHashSet<>();
++        final String[] parts = raw.split(",");
++        for (final String part : parts) {
++            final String trimmed = part.trim();
++            if (trimmed.isEmpty()) {
++                continue;
++            }
++            worlds.add(trimmed);
++        }
++        return Set.copyOf(worlds);
++    }
++
++    private WorldTickWorker selectWorker(final boolean dedicatedWorld) {
++        if (this.workers.isEmpty()) {
++            return null;
++        }
++        if (dedicatedWorld) {
++            return selectWorkerForDedicated();
++        }
++        return selectWorkerForShared();
++    }
++
++    private WorldTickWorker selectWorkerForDedicated() {
++        WorldTickWorker best = null;
++        int bestCount = Integer.MAX_VALUE;
++        boolean bestHasDedicated = true;
++        for (final WorldTickWorker worker : this.workers) {
++            final int count = worker.worldCount();
++            if (count == 0) {
++                return worker;
++            }
++            final boolean hasDedicated = worker.hasDedicatedWorlds();
++            if (count < bestCount || (count == bestCount && !hasDedicated && bestHasDedicated)) {
++                best = worker;
++                bestCount = count;
++                bestHasDedicated = hasDedicated;
++            } else if (count == bestCount && hasDedicated == bestHasDedicated && best != null && worker.id < best.id) {
++                best = worker;
++            }
++        }
++        return best;
++    }
++
++    private WorldTickWorker selectWorkerForShared() {
++        WorldTickWorker best = null;
++        int bestCount = Integer.MAX_VALUE;
++        for (final WorldTickWorker worker : this.workers) {
++            if (worker.hasDedicatedWorlds()) {
++                continue;
++            }
++            final int count = worker.worldCount();
++            if (count < bestCount) {
++                best = worker;
++                bestCount = count;
++            } else if (count == bestCount && best != null && worker.id < best.id) {
++                best = worker;
++            }
++        }
++        if (best != null) {
++            return best;
++        }
++        bestCount = Integer.MAX_VALUE;
++        for (final WorldTickWorker worker : this.workers) {
++            final int count = worker.worldCount();
++            if (count < bestCount) {
++                best = worker;
++                bestCount = count;
++            } else if (count == bestCount && best != null && worker.id < best.id) {
++                best = worker;
++            }
++        }
++        return best;
+     }
+ 
+     private void runInline(final Map<String, Runnable> worldTasks) {
+@@ -461,4 +592,91 @@ public final class WorldTickCoordinator {
+             throw new IllegalStateException("Tick task failed", thrown);
+         }
+     }
++
++    private static final class WorldTickWorker implements Runnable {
++        private final int id;
++        private final BlockingQueue<Runnable> queue;
++        private final TickThread thread;
++        private final AtomicBoolean running;
++        private final Set<String> worlds = new LinkedHashSet<>();
++        private int dedicatedWorlds;
++
++        private WorldTickWorker(final int id, final boolean daemon) {
++            this.id = id;
++            this.queue = new LinkedBlockingQueue<>();
++            this.running = new AtomicBoolean(true);
++            this.thread = new TickThread(this, THREAD_NAME_PREFIX + id);
++            if (daemon) {
++                this.thread.setDaemon(true);
++            }
++            this.thread.start();
++        }
++
++        private boolean enqueue(final Runnable task) {
++            if (!this.running.get()) {
++                return false;
++            }
++            this.queue.add(task);
++            return true;
++        }
++
++        private int queueSize() {
++            return this.queue.size();
++        }
++
++        private void shutdown() {
++            this.running.set(false);
++            this.thread.interrupt();
++        }
++
++        private boolean hasWorlds() {
++            return !this.worlds.isEmpty();
++        }
++
++        private int worldCount() {
++            return this.worlds.size();
++        }
++
++        private boolean hasDedicatedWorlds() {
++            return this.dedicatedWorlds > 0;
++        }
++
++        private void assignWorld(final String worldName, final boolean dedicated) {
++            if (this.worlds.add(worldName) && dedicated) {
++                this.dedicatedWorlds++;
++            }
++        }
++
++        private void removeWorld(final String worldName, final boolean dedicated) {
++            if (this.worlds.remove(worldName) && dedicated) {
++                this.dedicatedWorlds = Math.max(0, this.dedicatedWorlds - 1);
++            }
++        }
++
++        private void recalculateDedicatedWorlds(final Set<String> dedicated) {
++            int count = 0;
++            for (final String worldName : this.worlds) {
++                if (dedicated.contains(worldName)) {
++                    count++;
++                }
++            }
++            this.dedicatedWorlds = count;
++        }
++
++        @Override
++        public void run() {
++            while (this.running.get() || !this.queue.isEmpty()) {
++                try {
++                    final Runnable task = this.queue.poll(250L, TimeUnit.MILLISECONDS);
++                    if (task != null) {
++                        task.run();
++                    }
++                } catch (final InterruptedException ex) {
++                    if (!this.running.get()) {
++                        break;
++                    }
++                }
++            }
++        }
++    }
+ }
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+index db76c74..e6b4cf2 100644
+--- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+@@ -72,6 +72,42 @@ class WorldTickCoordinatorThreadPoolTest {
+         }
+     }
+ 
++    @Test
++    void worldAssignmentsStayStableAcrossDispatches() throws Exception {
++        final String previousEnabled = System.getProperty("pewpew.worldTickCoordinator");
++        final String previousTesting = System.getProperty("pewpew.worldTickCoordinator.testing");
++        final String previousWorkers = System.getProperty("pewpew.worldTickCoordinator.workers");
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        try {
++            System.setProperty("pewpew.worldTickCoordinator", "true");
++            System.setProperty("pewpew.worldTickCoordinator.testing", "true");
++            System.setProperty("pewpew.worldTickCoordinator.workers", "2");
++            coordinator.init();
++
++            final Map<String, String> firstThreads = new ConcurrentHashMap<>();
++            final Map<String, Runnable> tasks = new LinkedHashMap<>();
++            tasks.put("world_one", () -> firstThreads.put("world_one", Thread.currentThread().getName()));
++            tasks.put("world_two", () -> firstThreads.put("world_two", Thread.currentThread().getName()));
++
++            coordinator.dispatchWorldTicks(tasks).await();
++
++            final Map<String, String> secondThreads = new ConcurrentHashMap<>();
++            final Map<String, Runnable> secondTasks = new LinkedHashMap<>();
++            secondTasks.put("world_one", () -> secondThreads.put("world_one", Thread.currentThread().getName()));
++            secondTasks.put("world_two", () -> secondThreads.put("world_two", Thread.currentThread().getName()));
++
++            coordinator.dispatchWorldTicks(secondTasks).await();
++
++            assertEquals(firstThreads.get("world_one"), secondThreads.get("world_one"));
++            assertEquals(firstThreads.get("world_two"), secondThreads.get("world_two"));
++        } finally {
++            coordinator.shutdownForTesting();
++            restoreProperty("pewpew.worldTickCoordinator", previousEnabled);
++            restoreProperty("pewpew.worldTickCoordinator.testing", previousTesting);
++            restoreProperty("pewpew.worldTickCoordinator.workers", previousWorkers);
++        }
++    }
++
+     private static void restoreProperty(final String key, final String value) {
+         if (value == null) {
+             System.clearProperty(key);

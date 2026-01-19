@@ -1,10 +1,10 @@
 {
   "samples": 27,
-  "avgMspt": 67.07363083925925,
-  "p95Mspt": 74.90846126999999,
-  "avgTps": 14.523895384861246,
-  "avgVillagers": 409.3703703703704,
-  "avgHostiles": 397.3703703703704,
-  "day": {"samples": 27, "avgMspt": 67.07363083925925, "p95Mspt": 74.90846126999999, "avgTps": 14.523895384861246, "avgVillagers": 409.3703703703704, "avgHostiles": 397.3703703703704},
+  "avgMspt": 68.10078819666666,
+  "p95Mspt": 76.82299494,
+  "avgTps": 14.371026599874709,
+  "avgVillagers": 411.48148148148147,
+  "avgHostiles": 396.962962962963,
+  "day": {"samples": 27, "avgMspt": 68.10078819666666, "p95Mspt": 76.82299494, "avgTps": 14.371026599874709, "avgVillagers": 411.48148148148147, "avgHostiles": 396.962962962963},
   "night": {"samples": 0, "avgMspt": 0.0, "p95Mspt": 0.0, "avgTps": 0.0, "avgVillagers": 0.0, "avgHostiles": 0.0}
 }

@@ -96,6 +96,15 @@
 - Started reviewing SparklyPaper 1.21.8→1.21.11 patch diffs; changes so far appear to be API event additions and safety checks (no new perf candidates identified yet).
 - Re-ran singleworld bench with async pathfinding on + sensors off (cache enabled): avgMSPT 49.59 vs baseline 49.02 (+1.18%); regression reduced from prior +11.8%.
 - Multiworld run with world tick coordinator enabled crashed in chunk system (`LevelTicks.addContainer` AIOOB in fastutil); crash report saved at `tmp/bench/runs/multiverse-worldtick-on-3-multiworld/pewpew/crash-reports/crash-2026-01-18_18.52.42-server.txt`.
+- Reworked async pathfinding to a general PathNavigation-level async service:
+  - Added `AsyncPath`/`AsyncPathService` (snapshot-based) and wired PathNavigation to schedule async pathing.
+  - Added pending-path handling in AI behaviors/sensors/goals to avoid treating async results as unreachable.
+  - Removed AcquirePoi async hook and replaced with pending-aware path handling.
+  - Added patch files `0012-Async-path-service-plumbing.patch` and `0013-Handle-async-path-pending.patch`; removed old `0012-Use-AsyncAcquirePoi-when-enabled.patch`.
+- Investigated world tick coordinator CPU usage: bench logs show `world-tick-coordinator` enabled but workers set to `default`; if JVM reports 2 CPUs, default workers becomes 1 (availableProcessors - 1), resulting in single-core usage. Next step: confirm availableProcessors in test VM and set `settings.world-tick-coordinator-workers` (or `BENCH_PEWPEW_WORLD_TICK_WORKERS`) to >= number of active worlds.
+- Updated `scripts/bench/run_multiverse_benchmark.sh` to auto-pick `world-tick-coordinator-workers` when enabled and unset, using min(nproc, world count) with a floor of 2 when >1 CPU.
+- Reworked world-tick coordinator dispatch to pin each world to a stable worker thread with dynamic worker scaling and dedicated-world preferences; added `settings.world-tick-coordinator-dedicated-worlds` to `pewpew.yml` and a stability test.
+- Bench harness now writes `world-tick-coordinator-dedicated-worlds` in `pewpew.yml` (configurable via `BENCH_PEWPEW_WORLD_TICK_DEDICATED_WORLDS`).
 
 ## Build / test status
 - `./gradlew build` succeeds (warnings about deprecated APIs only).
@@ -114,7 +123,7 @@
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
-2) Measure async pathfinding regression again to confirm the per-tick section cache reduces snapshot overhead; iterate if regression persists.
+2) Measure async pathfinding regression again to validate PathNavigation-level async pathing + pending handling; iterate if regression persists.
 3) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
 4) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
 5) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).

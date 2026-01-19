@@ -1,0 +1,206 @@
+--- /dev/null
++++ b/net/minecraft/world/level/pathfinder/AsyncPath.java
+@@ -1,0 +_,204 @@
++package net.minecraft.world.level.pathfinder;
++
++import java.util.Collections;
++import java.util.List;
++import javax.annotation.Nullable;
++import net.minecraft.core.BlockPos;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.phys.Vec3;
++
++public final class AsyncPath extends Path {
++    private final long requestId;
++    @Nullable
++    private volatile Path resolved;
++
++    public AsyncPath(final long requestId, final BlockPos target) {
++        super(Collections.emptyList(), target, false);
++        this.requestId = requestId;
++    }
++
++    public long requestId() {
++        return this.requestId;
++    }
++
++    public boolean isReady() {
++        return this.resolved != null;
++    }
++
++    @Nullable
++    public Path resolvedPath() {
++        return this.resolved;
++    }
++
++    void complete(@Nullable final Path path) {
++        this.resolved = path == null ? new Path(List.of(), this.getTarget(), false) : path;
++    }
++
++    public static boolean isPending(@Nullable final Path path) {
++        return path instanceof AsyncPath asyncPath && !asyncPath.isReady();
++    }
++
++    @Override
++    public void advance() {
++        Path path = this.resolved;
++        if (path != null) {
++            path.advance();
++        }
++    }
++
++    @Override
++    public boolean notStarted() {
++        Path path = this.resolved;
++        return path == null || path.notStarted();
++    }
++
++    @Override
++    public boolean isDone() {
++        Path path = this.resolved;
++        return path != null && path.isDone();
++    }
++
++    @Nullable
++    @Override
++    public Node getEndNode() {
++        Path path = this.resolved;
++        return path == null ? null : path.getEndNode();
++    }
++
++    @Override
++    public Node getNode(int index) {
++        Path path = this.resolved;
++        if (path == null) {
++            return new Node(this.getTarget().getX(), this.getTarget().getY(), this.getTarget().getZ());
++        }
++        return path.getNode(index);
++    }
++
++    @Override
++    public void truncateNodes(int length) {
++        Path path = this.resolved;
++        if (path != null) {
++            path.truncateNodes(length);
++        }
++    }
++
++    @Override
++    public void replaceNode(int index, Node point) {
++        Path path = this.resolved;
++        if (path != null) {
++            path.replaceNode(index, point);
++        }
++    }
++
++    @Override
++    public int getNodeCount() {
++        Path path = this.resolved;
++        return path == null ? 0 : path.getNodeCount();
++    }
++
++    @Override
++    public int getNextNodeIndex() {
++        Path path = this.resolved;
++        return path == null ? 0 : path.getNextNodeIndex();
++    }
++
++    @Override
++    public void setNextNodeIndex(int currentPathIndex) {
++        Path path = this.resolved;
++        if (path != null) {
++            path.setNextNodeIndex(currentPathIndex);
++        }
++    }
++
++    @Override
++    public Vec3 getEntityPosAtNode(Entity entity, int index) {
++        Path path = this.resolved;
++        return path == null ? entity.position() : path.getEntityPosAtNode(entity, index);
++    }
++
++    @Override
++    public BlockPos getNodePos(int index) {
++        Path path = this.resolved;
++        return path == null ? this.getTarget() : path.getNodePos(index);
++    }
++
++    @Override
++    public Vec3 getNextEntityPos(Entity entity) {
++        Path path = this.resolved;
++        return path == null ? entity.position() : path.getNextEntityPos(entity);
++    }
++
++    @Override
++    public BlockPos getNextNodePos() {
++        Path path = this.resolved;
++        return path == null ? this.getTarget() : path.getNextNodePos();
++    }
++
++    @Override
++    public Node getNextNode() {
++        Path path = this.resolved;
++        if (path == null) {
++            return new Node(this.getTarget().getX(), this.getTarget().getY(), this.getTarget().getZ());
++        }
++        return path.getNextNode();
++    }
++
++    @Nullable
++    @Override
++    public Node getPreviousNode() {
++        Path path = this.resolved;
++        return path == null ? null : path.getPreviousNode();
++    }
++
++    @Override
++    public boolean sameAs(@Nullable Path other) {
++        Path path = this.resolved;
++        if (path == null) {
++            return false;
++        }
++        return path.sameAs(other);
++    }
++
++    @Override
++    public boolean canReach() {
++        Path path = this.resolved;
++        return path != null && path.canReach();
++    }
++
++    @Nullable
++    @Override
++    public Path.DebugData debugData() {
++        Path path = this.resolved;
++        return path == null ? null : path.debugData();
++    }
++
++    @Override
++    public void writeToStream(net.minecraft.network.FriendlyByteBuf buffer) {
++        Path path = this.resolved;
++        if (path != null) {
++            path.writeToStream(buffer);
++        }
++    }
++
++    @Override
++    public BlockPos getTarget() {
++        Path path = this.resolved;
++        return path == null ? super.getTarget() : path.getTarget();
++    }
++
++    @Override
++    public float getDistToTarget() {
++        Path path = this.resolved;
++        return path == null ? Float.MAX_VALUE : path.getDistToTarget();
++    }
++
++    @Override
++    public Path copy() {
++        Path path = this.resolved;
++        if (path == null) {
++            return new Path(List.of(), this.getTarget(), false);
++        }
++        return path.copy();
++    }
++}
