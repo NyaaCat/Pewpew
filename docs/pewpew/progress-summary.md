@@ -107,7 +107,9 @@
 - Bench harness now writes `world-tick-coordinator-dedicated-worlds` in `pewpew.yml` (configurable via `BENCH_PEWPEW_WORLD_TICK_DEDICATED_WORLDS`).
 - Single-world bench harness now writes `world-tick-coordinator-dedicated-worlds` in `pewpew.yml`.
 - Wired async sensor scheduling into `NearestLivingEntitySensor` and `PlayerSensor` via `AsyncSensorService` (new minecraft patch `0014-Async-sensor-scheduling.patch`).
-- Added world-unload invalidation for async caches in `CraftServer` (async sensors, async pathing, async acquire POI, and world-tick coordinator).
+- Added world-unload invalidation for async caches in `CraftServer` (async sensors, async pathing, and world-tick coordinator).
+- Removed AsyncAcquirePoi and its patches.
+- Added `AsyncSnapshotCache` to share per-world, per-tick section snapshots and wired async pathing to use it.
 
 ## Build / test status
 - `./gradlew build` succeeds (warnings about deprecated APIs only).

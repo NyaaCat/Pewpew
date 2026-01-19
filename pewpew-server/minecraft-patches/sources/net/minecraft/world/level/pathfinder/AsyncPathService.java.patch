@@ -3,6 +3,7 @@
 @@ -1,0 +_,280 @@
 +package net.minecraft.world.level.pathfinder;
 +
++import io.papermc.paper.pewpew.AsyncSnapshotCache;
 +import io.papermc.paper.pewpew.PewpewAsyncPool;
 +import io.papermc.paper.pewpew.WorldTickCoordinator;
 +import java.util.HashSet;
@@ -29,9 +30,6 @@
 +    private static final String MAX_PENDING_PROPERTY = "pewpew.asyncPathfinding.maxPending";
 +    private static final AsyncPathService INSTANCE = new AsyncPathService();
 +    private static final ThreadLocal<PathfindingContext> PATHFINDER_CONTEXT = ThreadLocal.withInitial(PathfindingContext::new);
-+    private static final ConcurrentHashMap<String, SnapshotPathNavigationRegion.SectionCache> REGION_CACHES =
-+        new ConcurrentHashMap<>();
-+
 +    private final ConcurrentHashMap<UUID, PendingRequest> pending = new ConcurrentHashMap<>();
 +    private final AtomicBoolean initialized = new AtomicBoolean();
 +    private final AtomicLong requestIds = new AtomicLong();
@@ -46,7 +44,7 @@
 +
 +    public static void invalidateWorld(final String worldName) {
 +        INSTANCE.pending.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
-+        REGION_CACHES.remove(worldName);
++        AsyncSnapshotCache.invalidateWorld(worldName);
 +    }
 +
 +    @Nullable
@@ -107,7 +105,7 @@
 +                level,
 +                center.offset(-range, -range, -range),
 +                center.offset(range, range, range),
-+                cacheForWorld(worldName)
++                AsyncSnapshotCache.sectionCacheForWorld(worldName, level.getGameTime())
 +            ),
 +            new HashSet<>(targets),
 +            maxRange,
@@ -137,10 +135,6 @@
 +            return;
 +        }
 +        this.executor = (ThreadPoolExecutor)PewpewAsyncPool.get();
-+    }
-+
-+    private static SnapshotPathNavigationRegion.SectionCache cacheForWorld(final String worldName) {
-+        return REGION_CACHES.computeIfAbsent(worldName, key -> new SnapshotPathNavigationRegion.SectionCache());
 +    }
 +
 +    private boolean shouldScheduleAsync(final ThreadPoolExecutor executor) {

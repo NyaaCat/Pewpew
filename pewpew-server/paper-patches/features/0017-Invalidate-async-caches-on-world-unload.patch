@@ -19,7 +19,6 @@ index 12d98f0..491417b 100644
  import net.minecraft.server.dedicated.DedicatedServerProperties;
  import net.minecraft.server.dedicated.DedicatedServerSettings;
  import net.minecraft.server.level.ServerLevel;
-+import net.minecraft.world.entity.ai.behavior.AsyncAcquirePoi;
 +import net.minecraft.world.level.pathfinder.AsyncPathService;
  import net.minecraft.server.level.ServerPlayer;
  import net.minecraft.server.level.TicketType;
@@ -32,7 +31,6 @@ index 12d98f0..491417b 100644
 +        WorldTickCoordinator.get().invalidateWorld(worldName);
 +        AsyncSensorService.invalidateWorld(worldName);
 +        AsyncPathService.invalidateWorld(worldName);
-+        AsyncAcquirePoi.invalidateWorld(worldName);
          return true;
      }
  
