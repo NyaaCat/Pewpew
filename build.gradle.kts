@@ -90,5 +90,5 @@ tasks.register("printPewpewVersion") {
 tasks.register("pewpewCi") {
     group = "verification"
     description = "Run Pewpew correctness tests and perf A/B checks."
-    dependsOn(":pewpew-api:check", ":pewpew-server:check", ":pewpew-server:pewpewPerfAB")
+    dependsOn(":paper-api:check", ":pewpew-server:check", ":pewpew-server:pewpewPerfAB")
 }

@@ -19,7 +19,7 @@ Environment overrides:
 - `BENCH_PLUGIN_API_COORDS` (override API coords for the bench plugin build)
 - `BENCH_RUN_ID` (override the unique run directory name)
 - `BENCH_KEEP_RUN_DIR=1` (keep the run directory for debugging)
-- `BENCH_SKIP_PEWPEW_API_PUBLISH=1` (skip publishing `pewpew-api` to Maven local)
+- `BENCH_SKIP_PEWPEW_API_PUBLISH=1` (skip publishing `paper-api` to Maven local)
 - `BENCH_SKIP_BASELINE=1` (skip baseline run if a baseline summary exists)
 - `BENCH_BASELINE_SUMMARY` (path to an existing baseline summary when skipping baseline)
 - `BENCH_SEED`, `BENCH_CELLS`, `BENCH_BOT_COUNT`

@@ -127,7 +127,7 @@ function ensure_pewpew_api_published() {
         return
     fi
     pushd "$ROOT_DIR" >/dev/null
-    ./gradlew :pewpew-api:publishToMavenLocal
+    ./gradlew :paper-api:publishToMavenLocal
     popd >/dev/null
 }
 

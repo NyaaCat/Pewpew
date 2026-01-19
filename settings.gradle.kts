@@ -11,5 +11,7 @@ plugins {
 
 rootProject.name = "pewpew"
 
-include("pewpew-api")
+include("paper-api")
 include("pewpew-server")
+
+project(":paper-api").projectDir = file("pewpew-api")

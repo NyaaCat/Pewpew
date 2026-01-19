@@ -27,7 +27,7 @@ any behavior-changing optimizations are opt-in and documented.
 
 ## Benchmarking
 - The bench plugin lives in `NyaaCat/pewpew-bench-plugin` (standalone repo).
-- Build it there with `./gradlew jar` (publish `pewpew-api` to Maven local first if needed).
+- Build it there with `./gradlew jar` (publish `paper-api` to Maven local first if needed).
 - Run the harness with `bash scripts/bench/run_benchmark.sh`.
 - Reports are written to `docs/pewpew/findings/` and run directories are cleaned after completion.
 

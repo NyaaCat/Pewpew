@@ -136,6 +136,8 @@
   - async sensors on: avgMspt 68.41 (-0.6%), avgTps 14.32 (+1.2%)
   - async pathing+sensors on: avgMspt 63.97 (-7.1%), avgTps 15.28 (+8.0%)
   - reports saved as `docs/pewpew/findings/multiverse-bench-report-pewpew-async-*-v2.md` and summaries as `docs/pewpew/findings/multiverse-bench-summary-pewpew-async-*-v2.json`
+- Built a Mojmap paperclip server jar for testing at `pewpew-server/build/libs/pewpew-paperclip-1.21.8-R0.1-SNAPSHOT-mojmap.jar`.
+- Switched build metadata to Paper coordinates (group `io.papermc.paper`, api artifact name `paper-api`) to restore valid Bukkit version strings for plugins like Essentials.
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
