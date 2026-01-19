@@ -180,6 +180,7 @@
   - `tmp/bench/prod-profile-20260119-190500-benchworld16-step2/on/profile-on-tree.html`
   - Observed `SpawnSnapshotLevelReader.getBiome` drop from ~0.67% to ~0.47% in the on profile.
 - Fixed spawn-biome cache key packing to use `BlockPos.asLong`, exported patch `pewpew-server/minecraft-patches/features/0020-Fix-quart-biome-cache-key-packing.patch`, and rebuilt the mojmap paperclip jar.
+- Implemented step 3 (use nearby spawn-range players list for nearest-player distance checks), exported patch `pewpew-server/minecraft-patches/features/0021-Use-nearby-players-list-for-spawn-distance-checks.patch`, and rebuilt the mojmap paperclip jar.
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.

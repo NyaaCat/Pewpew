@@ -1,0 +1,166 @@
+From d9189889906cf4e42b46ba421294ade4f0c0efd8 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Mon, 19 Jan 2026 18:57:50 +0000
+Subject: [PATCH] Use nearby players list for spawn distance checks
+
+---
+ net/minecraft/world/level/NaturalSpawner.java | 57 +++++++++++++++----
+ 1 file changed, 45 insertions(+), 12 deletions(-)
+
+diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
+index 56fd07d..84e813e 100644
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.objects.Object2IntMap;
+ import it.unimi.dsi.fastutil.objects.Object2IntMaps;
+ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
++import ca.spottedleaf.moonrise.common.list.ReferenceList;
+ import java.util.ArrayList;
+ import java.util.Arrays;
+ import java.util.List;
+@@ -21,6 +22,7 @@ import net.minecraft.core.RegistryAccess;
+ import net.minecraft.core.registries.BuiltInRegistries;
+ import net.minecraft.core.registries.Registries;
+ import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ServerPlayer;
+ import net.minecraft.tags.BiomeTags;
+ import net.minecraft.tags.BlockTags;
+ import net.minecraft.util.Mth;
+@@ -170,6 +172,8 @@ public final class NaturalSpawner {
+         ProfilerFiller profilerFiller = Profiler.get();
+         profilerFiller.push("spawner");
+         SpawnChunkSnapshot snapshot = SpawnChunkSnapshot.create(level, chunk);
++        final ReferenceList<ServerPlayer> spawnPlayers =
++            level.moonrise$getNearbyPlayers().getPlayers(chunk.getPos(), ca.spottedleaf.moonrise.common.misc.NearbyPlayers.NearbyMapType.SPAWN_RANGE);
+ 
+         for (MobCategory mobCategory : categories) {
+             // Paper start - Optional per player mob spawns
+@@ -201,7 +205,7 @@ public final class NaturalSpawner {
+             }
+             if (canSpawn) {
+                 spawnCategoryForChunk(mobCategory, level, chunk, spawnState::canSpawn, spawnState::afterSpawn,
+-                    maxSpawns, level.paperConfig().entities.spawning.perPlayerMobSpawns ? level.getChunkSource().chunkMap::updatePlayerMobTypeMap : null, snapshot);
++                    maxSpawns, level.paperConfig().entities.spawning.perPlayerMobSpawns ? level.getChunkSource().chunkMap::updatePlayerMobTypeMap : null, snapshot, spawnPlayers);
+                 // Paper end - Optional per player mob spawns
+             }
+         }
+@@ -228,7 +232,7 @@ public final class NaturalSpawner {
+     public static void spawnCategoryForChunk(
+         MobCategory category, ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnPredicate filter, NaturalSpawner.AfterSpawnCallback callback, final int maxSpawns, final Consumer<Entity> trackEntity
+     ) {
+-        spawnCategoryForChunk(category, level, chunk, filter, callback, maxSpawns, trackEntity, null);
++        spawnCategoryForChunk(category, level, chunk, filter, callback, maxSpawns, trackEntity, null, null);
+     }
+ 
+     private static void spawnCategoryForChunk(
+@@ -239,12 +243,13 @@ public final class NaturalSpawner {
+         NaturalSpawner.AfterSpawnCallback callback,
+         final int maxSpawns,
+         final Consumer<Entity> trackEntity,
+-        @Nullable SpawnChunkSnapshot snapshot
++        @Nullable SpawnChunkSnapshot snapshot,
++        @Nullable ReferenceList<ServerPlayer> spawnPlayers
+     ) {
+         // Paper end - Optional per player mob spawns
+         BlockPos randomPosWithin = getRandomPosWithin(level, chunk);
+         if (randomPosWithin.getY() >= level.getMinY() + 1) {
+-            spawnCategoryForPosition(category, level, chunk, randomPosWithin, filter, callback, maxSpawns, trackEntity, snapshot); // Paper - Optional per player mob spawns
++            spawnCategoryForPosition(category, level, chunk, randomPosWithin, filter, callback, maxSpawns, trackEntity, snapshot, spawnPlayers); // Paper - Optional per player mob spawns
+         }
+     }
+ 
+@@ -266,7 +271,7 @@ public final class NaturalSpawner {
+     public static void spawnCategoryForPosition(
+         MobCategory category, ServerLevel level, ChunkAccess chunk, BlockPos pos, NaturalSpawner.SpawnPredicate filter, NaturalSpawner.AfterSpawnCallback callback, final int maxSpawns, final @Nullable Consumer<Entity> trackEntity
+     ) {
+-        spawnCategoryForPosition(category, level, chunk, pos, filter, callback, maxSpawns, trackEntity, null);
++        spawnCategoryForPosition(category, level, chunk, pos, filter, callback, maxSpawns, trackEntity, null, null);
+     }
+ 
+     private static void spawnCategoryForPosition(
+@@ -278,12 +283,15 @@ public final class NaturalSpawner {
+         NaturalSpawner.AfterSpawnCallback callback,
+         final int maxSpawns,
+         final @Nullable Consumer<Entity> trackEntity,
+-        @Nullable SpawnChunkSnapshot snapshot
++        @Nullable SpawnChunkSnapshot snapshot,
++        @Nullable ReferenceList<ServerPlayer> spawnPlayers
+     ) {
+         // Paper end - Optional per player mob spawns
+         StructureManager structureManager = level.structureManager();
+         ChunkGenerator generator = level.getChunkSource().getGenerator();
+         LevelReader spawnLevel = snapshot != null ? snapshot.levelReader : level;
++        final ServerPlayer[] spawnPlayersRaw = spawnPlayers != null ? spawnPlayers.getRawDataUnchecked() : null;
++        final int spawnPlayersCount = spawnPlayers != null ? spawnPlayers.size() : 0;
+         int y = pos.getY();
+         BlockState blockState = getBlockStateIfLoadedAndInBounds(level, pos, snapshot); // Paper - don't load chunks for mob spawn
+         if (blockState != null && !blockState.isRedstoneConductor(chunk, pos)) { // Paper - don't load chunks for mob spawn
+@@ -305,10 +313,9 @@ public final class NaturalSpawner {
+                     mutableBlockPos.set(x, y, z);
+                     double d = x + 0.5;
+                     double d1 = z + 0.5;
+-                    Player nearestPlayer = level.getNearestPlayer(d, y, d1, -1.0, false);
+-                    if (nearestPlayer != null) {
+-                        double d2 = nearestPlayer.distanceToSqr(d, y, d1);
+-                        if (isLoadedAndInBounds(level, mutableBlockPos, snapshot) && isRightDistanceToPlayerAndSpawnPoint(level, chunk, mutableBlockPos, d2)) { // Paper - don't load chunks for mob spawn
++                    double nearestDistanceSqr = getNearestPlayerDistanceSqr(level, spawnPlayersRaw, spawnPlayersCount, d, y, d1);
++                    if (nearestDistanceSqr >= 0.0) {
++                        if (isLoadedAndInBounds(level, mutableBlockPos, snapshot) && isRightDistanceToPlayerAndSpawnPoint(level, chunk, mutableBlockPos, nearestDistanceSqr)) { // Paper - don't load chunks for mob spawn
+                             if (spawnerData == null) {
+                                 Optional<MobSpawnSettings.SpawnerData> randomSpawnMobAt = getRandomSpawnMobAt(
+                                     level, structureManager, generator, category, level.random, mutableBlockPos, spawnLevel
+@@ -322,7 +329,7 @@ public final class NaturalSpawner {
+                             }
+ 
+                             // Paper start - PreCreatureSpawnEvent
+-                            PreSpawnStatus doSpawning = isValidSpawnPostitionForType(level, spawnLevel, category, structureManager, generator, spawnerData, mutableBlockPos, d2);
++                            PreSpawnStatus doSpawning = isValidSpawnPostitionForType(level, spawnLevel, category, structureManager, generator, spawnerData, mutableBlockPos, nearestDistanceSqr);
+                             // Paper start - per player mob count backoff
+                             if (doSpawning == PreSpawnStatus.ABORT || doSpawning == PreSpawnStatus.CANCELLED) {
+                                 level.getChunkSource().chunkMap.updateFailurePlayerMobTypeMap(mutableBlockPos.getX() >> 4, mutableBlockPos.getZ() >> 4, category);
+@@ -340,7 +347,7 @@ public final class NaturalSpawner {
+                                 }
+ 
+                                 mobForSpawn.snapTo(d, y, d1, level.random.nextFloat() * 360.0F, 0.0F);
+-                                if (isValidPositionForMob(level, mobForSpawn, d2)) {
++                                if (isValidPositionForMob(level, mobForSpawn, nearestDistanceSqr)) {
+                                     spawnGroupData = mobForSpawn.finalizeSpawn(
+                                         level, level.getCurrentDifficultyAt(mobForSpawn.blockPosition()), EntitySpawnReason.NATURAL, spawnGroupData
+                                     );
+@@ -395,6 +402,32 @@ public final class NaturalSpawner {
+         return level.getChunkIfLoaded(pos) != null;
+     }
+ 
++    private static double getNearestPlayerDistanceSqr(
++        ServerLevel level,
++        @Nullable ServerPlayer[] spawnPlayersRaw,
++        int spawnPlayersCount,
++        double x,
++        double y,
++        double z
++    ) {
++        if (spawnPlayersRaw == null) {
++            Player nearestPlayer = level.getNearestPlayer(x, y, z, -1.0, false);
++            return nearestPlayer == null ? -1.0 : nearestPlayer.distanceToSqr(x, y, z);
++        }
++        double nearest = -1.0;
++        for (int i = 0; i < spawnPlayersCount; i++) {
++            ServerPlayer player = spawnPlayersRaw[i];
++            if (player.isSpectator()) {
++                continue;
++            }
++            double distance = player.distanceToSqr(x, y, z);
++            if (nearest < 0.0 || distance < nearest) {
++                nearest = distance;
++            }
++        }
++        return nearest;
++    }
++
+     private static boolean isRightDistanceToPlayerAndSpawnPoint(ServerLevel level, ChunkAccess chunk, BlockPos.MutableBlockPos pos, double distance) {
+         if (distance <= 576.0) {
+             return false;
+-- 
+2.47.3
+
