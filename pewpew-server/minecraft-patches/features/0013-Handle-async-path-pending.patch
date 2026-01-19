@@ -7,18 +7,61 @@ Subject: [PATCH] Handle async path pending results
 diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 --- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-@@ -22,6 +22,7 @@ import net.minecraft.world.entity.ai.behavior.declarative.BehaviorBuilder;
+@@ -22,6 +22,8 @@ import net.minecraft.world.entity.ai.behavior.declarative.BehaviorBuilder;
  import net.minecraft.world.entity.ai.memory.MemoryModuleType;
  import net.minecraft.world.entity.ai.village.poi.PoiManager;
  import net.minecraft.world.entity.ai.village.poi.PoiType;
 +import net.minecraft.world.level.pathfinder.AsyncPath;
++import net.minecraft.world.level.pathfinder.AsyncPathService;
  import net.minecraft.world.level.pathfinder.Path;
  import org.apache.commons.lang3.mutable.MutableLong;
-@@ -99,6 +100,9 @@ public class AcquirePoi {
+@@ -99,6 +100,39 @@ public class AcquirePoi {
                              int accuracy = 1;
++                            Set<BlockPos> positions = new HashSet<>(set.size());
                              for (Pair<Holder<PoiType>, BlockPos> pair : set) {
                                  accuracy = Math.max(accuracy, pair.getFirst().value().validRange());
++                                positions.add(pair.getSecond());
                              }
++                            final float followRange = mob.getNavigation().getMaxPathLength();
++                            final int range = (int)(followRange + 8.0F);
++                            if (!positions.isEmpty() && AsyncPathService.schedulePoiPath(
++                                level,
++                                mob,
++                                mob.getNavigation(),
++                                positions,
++                                mob.blockPosition(),
++                                range,
++                                accuracy,
++                                followRange,
++                                path -> {
++                                    if (onlyIfAdult && mob.isBaby()) {
++                                        return;
++                                    }
++                                    if (mob.getBrain().hasMemoryValue(acquiringMemory)) {
++                                        return;
++                                    }
++                                    if (existingAbsentMemory != acquiringMemory && mob.getBrain().hasMemoryValue(existingAbsentMemory)) {
++                                        return;
++                                    }
++                                    if (path != null && path.canReach()) {
++                                        BlockPos target = path.getTarget();
++                                        poiManager.getType(target).ifPresent(holder -> {
++                                            poiManager.take(acquirablePois, (holder1, blockPos) -> blockPos.equals(target), target, 1);
++                                            mob.getBrain().setMemory(acquiringMemory, GlobalPos.of(level.dimension(), target));
++                                            entityEventId.ifPresent(id -> level.broadcastEntityEvent(mob, id));
++                                            map.clear();
++                                            DebugPackets.sendPoiTicketCountPacket(level, target);
++                                        });
++                                    } else {
++                                        long now = level.getGameTime();
++                                        for (Pair<Holder<PoiType>, BlockPos> pair : set) {
++                                            map.computeIfAbsent(pair.getSecond().asLong(), l -> new AcquirePoi.JitteredLinearRetry(level.random, now));
++                                        }
++                                    }
++                                }
++                            )) {
++                                return true;
++                            }
                              Path path = findPathToPois(mob, set);
 +                            if (path != null && AsyncPath.isPending(path)) {
 +                                return true;
@@ -29,16 +72,44 @@ diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecr
 diff --git a/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java b/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
 --- a/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
 +++ b/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
-@@ -18,6 +18,7 @@ import net.minecraft.world.entity.ai.village.poi.PoiManager;
+@@ -18,6 +18,8 @@ import net.minecraft.world.entity.ai.village.poi.PoiManager;
  import net.minecraft.world.entity.ai.village.poi.PoiType;
  import net.minecraft.world.entity.ai.village.poi.PoiTypes;
  import net.minecraft.world.level.pathfinder.AsyncPath;
++import net.minecraft.world.level.pathfinder.AsyncPathService;
  import net.minecraft.world.level.pathfinder.Path;
-@@ -63,6 +64,9 @@ protected void doTick(ServerLevel level, Mob entity) {
+@@ -63,6 +64,28 @@ protected void doTick(ServerLevel level, Mob entity) {
              java.util.List<Pair<Holder<PoiType>, BlockPos>> poiposes = new java.util.ArrayList<>();
              // don't ask me why it's unbounded. ask mojang.
              io.papermc.paper.util.PoiAccess.findAnyPoiPositions(poiManager, type -> type.is(PoiTypes.HOME), predicate, entity.blockPosition(), 48, PoiManager.Occupancy.ANY, false, Integer.MAX_VALUE, poiposes);
-             Path path = AcquirePoi.findPathToPois(entity, new java.util.HashSet<>(poiposes));
++            Set<Pair<Holder<PoiType>, BlockPos>> poiSet = new java.util.HashSet<>(poiposes);
++            int accuracy = 1;
++            Set<BlockPos> positions = new java.util.HashSet<>(poiSet.size());
++            for (Pair<Holder<PoiType>, BlockPos> pair : poiSet) {
++                accuracy = Math.max(accuracy, pair.getFirst().value().validRange());
++                positions.add(pair.getSecond());
++            }
++            final int triedSnapshot = this.triedCount;
++            final long lastUpdateSnapshot = this.lastUpdate;
++            final float followRange = entity.getNavigation().getMaxPathLength();
++            final int range = (int)(followRange + 8.0F);
++            if (!positions.isEmpty() && AsyncPathService.schedulePoiPath(level, entity, entity.getNavigation(), positions, entity.blockPosition(), range, accuracy, followRange, path -> {
++                if (!entity.isBaby()) {
++                    return;
++                }
++                if (path != null && path.canReach()) {
++                    BlockPos target = path.getTarget();
++                    Optional<Holder<PoiType>> type = poiManager.getType(target);
++                    if (type.isPresent()) {
++                        entity.getBrain().setMemory(MemoryModuleType.NEAREST_BED, target);
++                    }
++                } else if (triedSnapshot < 5) {
++                    this.batchCache.long2LongEntrySet().removeIf(entry -> entry.getLongValue() < lastUpdateSnapshot);
++                }
++            })) {
++                return;
++            }
++            Path path = AcquirePoi.findPathToPois(entity, poiSet);
              // Paper end - optimise POI access
 +            if (path != null && AsyncPath.isPending(path)) {
 +                return;
@@ -54,22 +125,33 @@ diff --git a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java b/net/
  import net.minecraft.world.entity.ai.village.poi.PoiType;
  import net.minecraft.world.entity.ai.village.poi.PoiTypes;
  import net.minecraft.world.entity.npc.Villager;
-+import net.minecraft.world.level.pathfinder.AsyncPath;
++import net.minecraft.world.level.PathNavigationRegion;
  import net.minecraft.world.level.pathfinder.Path;
-@@ -106,7 +107,13 @@ private Optional<BlockPos> takeVacantBed(ServerLevel level, Villager villager) {
+@@ -106,7 +107,18 @@ private Optional<BlockPos> takeVacantBed(ServerLevel level, Villager villager) {
      }
  
-     private boolean canReach(Villager villager, BlockPos pos, Holder<PoiType> poiType) {
-         Path path = villager.getNavigation().createPath(pos, poiType.value().validRange());
+-    private boolean canReach(Villager villager, BlockPos pos, Holder<PoiType> poiType) {
+-        Path path = villager.getNavigation().createPath(pos, poiType.value().validRange());
 -        return path != null && path.canReach();
-+        if (path == null) {
-+            return false;
-+        }
-+        if (AsyncPath.isPending(path)) {
-+            return true;
-+        }
-+        return path.canReach();
-     }
+-    }
++    private boolean canReach(Villager villager, BlockPos pos, Holder<PoiType> poiType) {
++        float followRange = villager.getNavigation().getMaxPathLength();
++        int range = (int)(followRange + 8.0F);
++        PathNavigationRegion region = new PathNavigationRegion(
++            villager.level(),
++            villager.blockPosition().offset(-range, -range, -range),
++            villager.blockPosition().offset(range, range, range)
++        );
++        Path path = villager.getNavigation().pathFinder.findPath(
++            region,
++            villager,
++            java.util.Set.of(pos),
++            followRange,
++            poiType.value().validRange(),
++            villager.getNavigation().getMaxVisitedNodesMultiplier()
++        );
++        return path != null && path.canReach();
++    }
 diff --git a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
 --- a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
 +++ b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
@@ -158,13 +240,49 @@ diff --git a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.j
  import net.minecraft.world.entity.ai.village.poi.PoiType;
  import net.minecraft.world.entity.ai.village.poi.PoiTypes;
  import net.minecraft.world.level.pathfinder.AsyncPath;
++import net.minecraft.world.level.pathfinder.AsyncPathService;
  import net.minecraft.world.level.pathfinder.Path;
 @@ -62,6 +63,9 @@
                                  Set<Pair<Holder<PoiType>, BlockPos>> set = poiManager.findAllWithType(
                                          poi -> poi.is(PoiTypes.HOME), predicate, mob.blockPosition(), 48, PoiManager.Occupancy.ANY
                                      )
                                      .collect(Collectors.toSet());
-                                 Path path = AcquirePoi.findPathToPois(mob, set);
++                                int accuracy = 1;
++                                Set<BlockPos> positions = new java.util.HashSet<>(set.size());
++                                for (Pair<Holder<PoiType>, BlockPos> pair : set) {
++                                    accuracy = Math.max(accuracy, pair.getFirst().value().validRange());
++                                    positions.add(pair.getSecond());
++                                }
++                                final float followRange = mob.getNavigation().getMaxPathLength();
++                                final int range = (int)(followRange + 8.0F);
++                                if (!positions.isEmpty() && AsyncPathService.schedulePoiPath(
++                                    level,
++                                    mob,
++                                    mob.getNavigation(),
++                                    positions,
++                                    mob.blockPosition(),
++                                    range,
++                                    accuracy,
++                                    followRange,
++                                    path -> {
++                                        if (mob.getBrain().hasMemoryValue(MemoryModuleType.WALK_TARGET) || mob.getBrain().hasMemoryValue(MemoryModuleType.HOME)) {
++                                            return;
++                                        }
++                                        if (path != null && path.canReach()) {
++                                            BlockPos target = path.getTarget();
++                                            Optional<Holder<PoiType>> type = poiManager.getType(target);
++                                            if (type.isPresent()) {
++                                                mob.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(target, speedModifier, 1));
++                                                DebugPackets.sendPoiTicketCountPacket(level, target);
++                                            }
++                                        } else if (mutableInt.getValue() < 5) {
++                                            map.long2LongEntrySet().removeIf(entry -> entry.getLongValue() < mutableLong.getValue());
++                                        }
++                                    }
++                                )) {
++                                    return true;
++                                }
++                                Path path = AcquirePoi.findPathToPois(mob, set);
 +                                if (path != null && AsyncPath.isPending(path)) {
 +                                    return true;
 +                                }

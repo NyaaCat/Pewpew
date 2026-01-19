@@ -1,12 +1,13 @@
 --- /dev/null
 +++ b/net/minecraft/world/level/pathfinder/AsyncPathService.java
-@@ -1,0 +_,280 @@
+@@ -1,0 +_,488 @@
 +package net.minecraft.world.level.pathfinder;
 +
 +import io.papermc.paper.pewpew.AsyncSnapshotCache;
 +import io.papermc.paper.pewpew.PewpewAsyncPool;
 +import io.papermc.paper.pewpew.WorldTickCoordinator;
 +import java.util.HashSet;
++import java.util.Objects;
 +import java.util.Set;
 +import java.util.UUID;
 +import java.util.concurrent.ConcurrentHashMap;
@@ -21,6 +22,7 @@
 +import net.minecraft.server.level.ServerLevel;
 +import net.minecraft.world.entity.Entity;
 +import net.minecraft.world.entity.Mob;
++import net.minecraft.world.entity.MobCategory;
 +import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 +import net.minecraft.world.entity.ai.navigation.PathNavigation;
 +
@@ -28,9 +30,11 @@
 +    private static final Logger LOGGER = Logger.getLogger(AsyncPathService.class.getName());
 +    private static final String ENABLE_PROPERTY = "pewpew.asyncPathfinding";
 +    private static final String MAX_PENDING_PROPERTY = "pewpew.asyncPathfinding.maxPending";
++    private static final String MONSTER_SYNC_FALLBACK_PROPERTY = "pewpew.asyncPathfinding.monsterSyncFallback";
 +    private static final AsyncPathService INSTANCE = new AsyncPathService();
 +    private static final ThreadLocal<PathfindingContext> PATHFINDER_CONTEXT = ThreadLocal.withInitial(PathfindingContext::new);
 +    private final ConcurrentHashMap<UUID, PendingRequest> pending = new ConcurrentHashMap<>();
++    private final ConcurrentHashMap<UUID, PendingPoiRequest> pendingPoi = new ConcurrentHashMap<>();
 +    private final AtomicBoolean initialized = new AtomicBoolean();
 +    private final AtomicLong requestIds = new AtomicLong();
 +    private volatile ThreadPoolExecutor executor;
@@ -44,7 +48,13 @@
 +
 +    public static void invalidateWorld(final String worldName) {
 +        INSTANCE.pending.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
++        INSTANCE.pendingPoi.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
 +        AsyncSnapshotCache.invalidateWorld(worldName);
++    }
++
++    @FunctionalInterface
++    public interface PoiPathCallback {
++        void accept(@Nullable Path path);
 +    }
 +
 +    @Nullable
@@ -59,6 +69,33 @@
 +        final float maxRange
 +    ) {
 +        return INSTANCE.scheduleInternal(level, mob, navigation, targets, center, range, accuracy, maxRange);
++    }
++
++    public static boolean schedulePoiPath(
++        final ServerLevel level,
++        final Mob mob,
++        final PathNavigation navigation,
++        final Set<BlockPos> targets,
++        final BlockPos center,
++        final int range,
++        final int accuracy,
++        final float maxRange,
++        final PoiPathCallback callback
++    ) {
++        return INSTANCE.schedulePoiInternal(level, mob, navigation, targets, center, range, accuracy, maxRange, callback);
++    }
++
++    public static boolean shouldSkipSyncFallback(final Mob mob) {
++        if (!isEnabled()) {
++            return false;
++        }
++        if (Boolean.getBoolean(MONSTER_SYNC_FALLBACK_PROPERTY)) {
++            return false;
++        }
++        if (mob.getType().getCategory() != MobCategory.MONSTER) {
++            return false;
++        }
++        return INSTANCE.isQueueSaturated();
 +    }
 +
 +    @Nullable
@@ -130,11 +167,86 @@
 +        return asyncPath;
 +    }
 +
++    private boolean schedulePoiInternal(
++        final ServerLevel level,
++        final Mob mob,
++        final PathNavigation navigation,
++        final Set<BlockPos> targets,
++        final BlockPos center,
++        final int range,
++        final int accuracy,
++        final float maxRange,
++        final PoiPathCallback callback
++    ) {
++        if (!isEnabled()) {
++            return false;
++        }
++        if (targets.isEmpty()) {
++            return false;
++        }
++        if (!(navigation instanceof GroundPathNavigation)) {
++            return false;
++        }
++        Objects.requireNonNull(callback, "callback");
++        final UUID mobId = mob.getUUID();
++        if (this.pendingPoi.containsKey(mobId)) {
++            return true;
++        }
++        init();
++        final ThreadPoolExecutor executor = this.executor;
++        if (executor == null || !shouldScheduleAsync(executor)) {
++            return false;
++        }
++        final String worldName = level.getWorld().getName();
++        final PendingPoiRequest request = new PendingPoiRequest(
++            level,
++            mobId,
++            navigation,
++            mob.blockPosition(),
++            MobPathSnapshot.from(mob),
++            SnapshotPathNavigationRegion.capture(
++                level,
++                center.offset(-range, -range, -range),
++                center.offset(range, range, range),
++                AsyncSnapshotCache.sectionCacheForWorld(worldName, level.getGameTime())
++            ),
++            new HashSet<>(targets),
++            maxRange,
++            accuracy,
++            navigation.getMaxVisitedNodesMultiplier(),
++            navigation.getNodeEvaluator().canPassDoors(),
++            navigation.getNodeEvaluator().canOpenDoors(),
++            navigation.getNodeEvaluator().canFloat(),
++            navigation.getNodeEvaluator().canWalkOverFences(),
++            WorldTickCoordinator.get().currentGeneration(worldName),
++            callback
++        );
++        if (this.pendingPoi.putIfAbsent(mobId, request) != null) {
++            return true;
++        }
++        try {
++            executor.execute(request::runAsync);
++        } catch (RejectedExecutionException ex) {
++            this.pendingPoi.remove(mobId, request);
++            return false;
++        }
++        return true;
++    }
++
 +    private void init() {
 +        if (!this.initialized.compareAndSet(false, true)) {
 +            return;
 +        }
 +        this.executor = (ThreadPoolExecutor)PewpewAsyncPool.get();
++    }
++
++    private boolean isQueueSaturated() {
++        init();
++        final ThreadPoolExecutor executor = this.executor;
++        if (executor == null) {
++            return false;
++        }
++        return !shouldScheduleAsync(executor);
 +    }
 +
 +    private boolean shouldScheduleAsync(final ThreadPoolExecutor executor) {
@@ -270,6 +382,110 @@
 +            if (this.navigation.getPath() == this.asyncPath) {
 +                this.navigation.stop();
 +            }
++        }
++    }
++
++    private final class PendingPoiRequest {
++        private final ServerLevel level;
++        private final String worldName;
++        private final UUID mobId;
++        private final PathNavigation navigation;
++        private final BlockPos originPos;
++        private final MobPathSnapshot mobSnapshot;
++        private final SnapshotPathNavigationRegion region;
++        private final Set<BlockPos> targets;
++        private final float maxRange;
++        private final int accuracy;
++        private final float searchDepthMultiplier;
++        private final boolean canPassDoors;
++        private final boolean canOpenDoors;
++        private final boolean canFloat;
++        private final boolean canWalkOverFences;
++        private final long generationId;
++        private final PoiPathCallback callback;
++
++        private PendingPoiRequest(
++            final ServerLevel level,
++            final UUID mobId,
++            final PathNavigation navigation,
++            final BlockPos originPos,
++            final MobPathSnapshot mobSnapshot,
++            final SnapshotPathNavigationRegion region,
++            final Set<BlockPos> targets,
++            final float maxRange,
++            final int accuracy,
++            final float searchDepthMultiplier,
++            final boolean canPassDoors,
++            final boolean canOpenDoors,
++            final boolean canFloat,
++            final boolean canWalkOverFences,
++            final long generationId,
++            final PoiPathCallback callback
++        ) {
++            this.level = level;
++            this.worldName = level.getWorld().getName();
++            this.mobId = mobId;
++            this.navigation = navigation;
++            this.originPos = originPos;
++            this.mobSnapshot = mobSnapshot;
++            this.region = region;
++            this.targets = targets;
++            this.maxRange = maxRange;
++            this.accuracy = accuracy;
++            this.searchDepthMultiplier = searchDepthMultiplier;
++            this.canPassDoors = canPassDoors;
++            this.canOpenDoors = canOpenDoors;
++            this.canFloat = canFloat;
++            this.canWalkOverFences = canWalkOverFences;
++            this.generationId = generationId;
++            this.callback = callback;
++        }
++
++        private void runAsync() {
++            Path path = null;
++            Throwable error = null;
++            try {
++                PathfindingContext context = PATHFINDER_CONTEXT.get();
++                SnapshotWalkNodeEvaluator evaluator = context.evaluator;
++                evaluator.setCanPassDoors(this.canPassDoors);
++                evaluator.setCanOpenDoors(this.canOpenDoors);
++                evaluator.setCanFloat(this.canFloat);
++                evaluator.setCanWalkOverFences(this.canWalkOverFences);
++                SnapshotPathFinder pathFinder = context.pathFinder;
++                pathFinder.setMaxVisitedNodes(Math.max(1, (int)(this.maxRange * 16.0F)));
++                path = pathFinder.findPath(this.region, this.mobSnapshot, this.targets, this.maxRange, this.accuracy, this.searchDepthMultiplier);
++            } catch (Throwable throwable) {
++                error = throwable;
++            }
++            final Path finalPath = path;
++            final Throwable finalError = error;
++            WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> applyResult(finalPath, finalError));
++        }
++
++        private void applyResult(@Nullable Path path, @Nullable Throwable error) {
++            if (!AsyncPathService.this.pendingPoi.remove(this.mobId, this)) {
++                return;
++            }
++            if (error != null) {
++                LOGGER.log(Level.WARNING, "Async POI pathfinding failed", error);
++                this.callback.accept(null);
++                return;
++            }
++            if (!this.region.isStillValid(this.level)) {
++                this.callback.accept(null);
++                return;
++            }
++            final Entity entity = this.level.getEntity(this.mobId);
++            if (!(entity instanceof Mob mob) || !mob.isAlive()) {
++                return;
++            }
++            if (mob.getNavigation() != this.navigation) {
++                return;
++            }
++            if (!mob.blockPosition().closerThan(this.originPos, 8.0)) {
++                return;
++            }
++            this.callback.accept(path);
 +        }
 +    }
 +}

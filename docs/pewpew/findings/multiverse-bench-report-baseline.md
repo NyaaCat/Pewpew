@@ -1,6 +1,6 @@
 # Pewpew Multiworld Bench Report
 
-- Timestamp (UTC): 2026-01-19T02:55:27.921674+00:00
+- Timestamp (UTC): 2026-01-19T05:57:33.097931+00:00
 - CPU model: AMD EPYC 7763 64-Core Processor
 - CPU cores: 16
 - Memory: 31.35 GiB
@@ -19,9 +19,9 @@
 
 ## Results
 - Samples: 27
-- Avg MSPT: 68.10
-- P95 MSPT: 76.82
-- Avg TPS: 14.37
-- Avg villagers: 411.48
-- Avg hostiles: 396.96
+- Avg MSPT: 67.43
+- P95 MSPT: 74.26
+- Avg TPS: 14.48
+- Avg villagers: 414.48
+- Avg hostiles: 399.04
 

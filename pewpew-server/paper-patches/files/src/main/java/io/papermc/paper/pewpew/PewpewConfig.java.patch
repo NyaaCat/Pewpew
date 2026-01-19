@@ -36,6 +36,7 @@
 +    public static int asyncPoolWorkers;
 +    public static int asyncPoolQueueLimit;
 +    public static int asyncPathfindingMaxPending;
++    public static boolean asyncPathfindingMonsterSyncFallback;
 +    public static int worldTickCoordinatorWorkers;
 +    public static long worldTickCoordinatorStallThresholdNanos;
 +    public static List<String> worldTickCoordinatorDedicatedWorlds;
@@ -72,6 +73,7 @@
 +        asyncPoolWorkers = getInt("settings.async-pool-workers", -1);
 +        asyncPoolQueueLimit = getInt("settings.async-pool-queue-limit", -1);
 +        asyncPathfindingMaxPending = getInt("settings.async-pathfinding-max-pending", -1);
++        asyncPathfindingMonsterSyncFallback = getBoolean("settings.async-pathfinding-monster-sync-fallback", true);
 +        worldTickCoordinatorWorkers = getInt("settings.world-tick-coordinator-workers", -1);
 +        worldTickCoordinatorStallThresholdNanos = getLong("settings.world-tick-coordinator-stall-threshold-nanos", 50_000_000L);
 +        worldTickCoordinatorDedicatedWorlds = getStringList("settings.world-tick-coordinator-dedicated-worlds");
@@ -101,6 +103,7 @@
 +        setOptionalIntProperty("pewpew.async.workers", asyncPoolWorkers);
 +        setOptionalIntProperty("pewpew.async.queueLimit", asyncPoolQueueLimit);
 +        setOptionalIntProperty("pewpew.asyncPathfinding.maxPending", asyncPathfindingMaxPending);
++        setBooleanProperty("pewpew.asyncPathfinding.monsterSyncFallback", asyncPathfindingMonsterSyncFallback);
 +        setOptionalIntProperty("pewpew.worldTickCoordinator.workers", worldTickCoordinatorWorkers);
 +        setOptionalLongProperty("pewpew.worldTickCoordinator.stallThresholdNanos", worldTickCoordinatorStallThresholdNanos);
 +        setOptionalStringListProperty("pewpew.worldTickCoordinator.dedicatedWorlds", worldTickCoordinatorDedicatedWorlds);
@@ -116,7 +119,8 @@
 +        logFlag("tick-thread-hard-throw", tickThreadHardThrow);
 +        LOGGER.info("Pewpew settings: async-pool-workers=" + formatOptional(asyncPoolWorkers)
 +            + " async-pool-queue-limit=" + formatOptional(asyncPoolQueueLimit)
-+            + " async-pathfinding-max-pending=" + formatOptional(asyncPathfindingMaxPending));
++            + " async-pathfinding-max-pending=" + formatOptional(asyncPathfindingMaxPending)
++            + " async-pathfinding-monster-sync-fallback=" + (asyncPathfindingMonsterSyncFallback ? "enabled" : "disabled"));
 +        LOGGER.info("Pewpew settings: world-tick-max-workers=" + formatOptional(worldTickCoordinatorWorkers)
 +            + " world-tick-stall-threshold-nanos=" + worldTickCoordinatorStallThresholdNanos
 +            + " world-tick-dedicated-worlds=" + formatOptionalList(worldTickCoordinatorDedicatedWorlds));

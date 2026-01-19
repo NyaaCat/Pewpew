@@ -37,6 +37,7 @@ Environment overrides:
 - `BENCH_PEWPEW_FEATURE_TICK_THREAD_HARD_THROW` (default: `true`)
 - `BENCH_PEWPEW_ASYNC_POOL_WORKERS` (default: `-1` for default)
 - `BENCH_PEWPEW_ASYNC_POOL_QUEUE_LIMIT` (default: `-1` for default)
+- `BENCH_PEWPEW_ASYNC_PATH_MONSTER_SYNC_FALLBACK` (default: `true`)
 - `BENCH_PEWPEW_WORLD_TICK_WORKERS` (default: `-1` for default)
 - `BENCH_PEWPEW_WORLD_TICK_STALL_NANOS` (default: `50000000`)
 

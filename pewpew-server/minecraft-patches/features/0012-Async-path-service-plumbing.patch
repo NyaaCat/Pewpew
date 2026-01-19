@@ -43,6 +43,10 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
 +                    this.resetStuckTimeout();
 +                    return asyncPath;
 +                }
++                if (AsyncPathService.shouldSkipSyncFallback(this.mob)) {
++                    profilerFiller.pop();
++                    return null;
++                }
 +            }
              PathNavigationRegion pathNavigationRegion = new PathNavigationRegion(this.level, blockPos.offset(-i, -i, -i), blockPos.offset(i, i, i));
              Path path = this.pathFinder.findPath(pathNavigationRegion, this.mob, targets, followRange, accuracy, this.maxVisitedNodesMultiplier);
