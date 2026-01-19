@@ -1,6 +1,8 @@
 # Pewpew Progress Summary
 
 ## Completed work
+- Added a global commit queue to run post-world tasks on the server thread; non-player portal handling now defers to this queue when parallel world ticking is enabled to avoid cross-world teleports during world ticks.
+- Added `WorldTickCoordinatorGlobalCommitTest` and ran the Normal test suite; rebuilt server/minecraft patches and built the Mojmap paperclip jar.
 - Restored clean patch-rebuild state by aborting stray `git am` sessions in `paper-server` and `pewpew-server/src/minecraft/java`.
 - Regenerated Pewpew patch series from patched sources and fixed patch numbering/renames.
 - Added commit-queue support to `WorldTickCoordinator` and synchronized `MapIndex#getNextMapId`.

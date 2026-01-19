@@ -1,14 +1,11 @@
-From bb4b872bf07358beac7505c82d3de48ed370efe0 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Mon, 19 Jan 2026 11:27:18 +0000
 Subject: [PATCH] Spawn snapshot cache for natural spawns
 
----
- net/minecraft/world/level/NaturalSpawner.java | 314 +++++++++++++++++-
- 1 file changed, 304 insertions(+), 10 deletions(-)
 
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 4f64750..15b11bc 100644
+index 4f647507d06d45a65b4b1793219d90c65e110225..15b11bc9b4c9c7e4e674831eda43c9b20641a326 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
 @@ -1,10 +1,12 @@
@@ -469,6 +466,3 @@ index 4f64750..15b11bc 100644
      @FunctionalInterface
      public interface AfterSpawnCallback {
          void run(Mob mob, ChunkAccess chunk);
--- 
-2.47.3
-

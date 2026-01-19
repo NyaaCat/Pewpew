@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/pewpew/AsyncSnapshotCache.java
-@@ -1,0 +_,31 @@
+@@ -1,0 +_,34 @@
 +package io.papermc.paper.pewpew;
 +
 +import java.util.Objects;

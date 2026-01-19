@@ -16,17 +16,18 @@ index 84ff4b1ad7ff47e69f28f98e66625ba2719f84a1..6440dc8d500d8d696baaa0794897f26a
  import java.util.Map;
  import java.util.Objects;
  import java.util.concurrent.ConcurrentHashMap;
-@@ -35,6 +36,9 @@ public final class WorldTickCoordinator {
+@@ -35,6 +36,10 @@ public final class WorldTickCoordinator {
      private final AtomicReference<TickBarrier> inFlightBarrier = new AtomicReference<>();
      private final Object executorLock = new Object();
      private volatile ThreadPoolExecutor executor;
 +    private final SnapshotManager snapshotManager = new SnapshotManager();
++    private final CommitQueue globalCommitQueue = new CommitQueue();
 +    private final ConcurrentHashMap<String, CommitQueue> commitQueues = new ConcurrentHashMap<>();
 +    private final ConcurrentHashMap<String, AtomicLong> generationsByWorld = new ConcurrentHashMap<>();
  
      private WorldTickCoordinator() {
      }
-@@ -168,6 +172,60 @@ public final class WorldTickCoordinator {
+@@ -168,6 +172,68 @@ public final class WorldTickCoordinator {
          );
      }
  
@@ -49,6 +50,14 @@ index 84ff4b1ad7ff47e69f28f98e66625ba2719f84a1..6440dc8d500d8d696baaa0794897f26a
 +        generationFor(worldName).incrementAndGet();
 +        this.snapshotManager.clearWorld(worldName);
 +        this.commitQueues.remove(worldName);
++    }
++
++    public void enqueueGlobalCommit(final Runnable commit) {
++        this.globalCommitQueue.enqueue(commit);
++    }
++
++    public int drainGlobalCommits() {
++        return this.globalCommitQueue.drain();
 +    }
 +
 +    public void enqueueCommit(final String worldName, final long generationId, final Runnable commit) {

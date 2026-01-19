@@ -1,0 +1,28 @@
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorGlobalCommitTest.java
+@@ -1,0 +_,25 @@
++package io.papermc.paper.pewpew;
++
++import java.util.concurrent.atomic.AtomicInteger;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++
++@Normal
++class WorldTickCoordinatorGlobalCommitTest {
++    @Test
++    void globalCommitsDrainOnce() {
++        final WorldTickCoordinator coordinator = WorldTickCoordinator.get();
++        coordinator.drainGlobalCommits();
++        final AtomicInteger counter = new AtomicInteger();
++
++        coordinator.enqueueGlobalCommit(counter::incrementAndGet);
++        coordinator.enqueueGlobalCommit(counter::incrementAndGet);
++
++        assertEquals(0, counter.get());
++        assertEquals(2, coordinator.drainGlobalCommits());
++        assertEquals(2, counter.get());
++        assertEquals(0, coordinator.drainGlobalCommits());
++    }
++}

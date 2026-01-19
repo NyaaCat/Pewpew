@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/net/minecraft/world/level/pathfinder/AsyncPath.java
-@@ -1,0 +_,204 @@
+@@ -1,0 +_,203 @@
 +package net.minecraft.world.level.pathfinder;
 +
 +import java.util.Collections;

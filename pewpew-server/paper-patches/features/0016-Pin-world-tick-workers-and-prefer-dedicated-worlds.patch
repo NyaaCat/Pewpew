@@ -1,10 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix <w@m.ac>
-Date: Sun, 19 Jan 2026 01:25:00 +0900
+Date: Mon, 19 Jan 2026 01:25:00 +0900
 Subject: [PATCH] Pin world tick workers and prefer dedicated worlds
 
+
 diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
-index 660041d..c2385d6 100644
+index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a0854a74846f 100644
 --- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 +++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 @@ -1,17 +1,19 @@
@@ -408,7 +409,7 @@ index 660041d..c2385d6 100644
 +    }
  }
 diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
-index db76c74..e6b4cf2 100644
+index db76c74d9a5f7ad70741ba2a0199f0aaf63b159d..e6b4cf29ccca25207e125e2b65725153d86b6148 100644
 --- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
 +++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
 @@ -72,6 +72,42 @@ class WorldTickCoordinatorThreadPoolTest {

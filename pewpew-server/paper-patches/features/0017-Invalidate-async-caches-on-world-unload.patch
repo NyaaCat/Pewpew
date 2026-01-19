@@ -1,10 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix <w@m.ac>
-Date: Sun, 19 Jan 2026 02:32:00 +0900
+Date: Mon, 19 Jan 2026 02:32:00 +0900
 Subject: [PATCH] Invalidate async caches on world unload
 
+
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 12d98f0..491417b 100644
+index 12d98f06b23f13c2f267463556094078d27f6a3f..0e3ff135c166c27d825a11f382ed711b14cd9f0f 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 @@ -13,6 +13,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -23,7 +24,7 @@ index 12d98f0..491417b 100644
  import net.minecraft.server.level.ServerPlayer;
  import net.minecraft.server.level.TicketType;
  import net.minecraft.server.players.IpBanListEntry;
-@@ -1469,6 +1472,10 @@ public final class CraftServer implements Server {
+@@ -1469,6 +1471,10 @@ public final class CraftServer implements Server {
  
          this.worlds.remove(world.getName().toLowerCase(Locale.ROOT));
          this.console.removeLevel(handle);

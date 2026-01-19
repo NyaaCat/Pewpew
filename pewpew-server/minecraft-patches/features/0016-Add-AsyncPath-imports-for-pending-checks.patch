@@ -1,19 +1,11 @@
-From 5a6bbabee6b29b3dc0e0b2afb299f4222dcf8295 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Mon, 19 Jan 2026 11:33:21 +0000
 Subject: [PATCH] Add AsyncPath imports for pending checks
 
----
- net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java  | 1 +
- net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java     | 1 +
- .../world/entity/ai/behavior/PrepareRamNearestTarget.java        | 1 +
- net/minecraft/world/entity/ai/behavior/YieldJobSite.java         | 1 +
- net/minecraft/world/entity/ai/goal/target/TargetGoal.java        | 1 +
- net/minecraft/world/entity/animal/sniffer/Sniffer.java           | 1 +
- 6 files changed, 6 insertions(+)
 
 diff --git a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
-index 79cdfc8..cafa021 100644
+index 79cdfc8a82c27e45ba26fe84dd662be64c056226..cafa021f62497b7a6711e07fec732a644d4baa5b 100644
 --- a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
 +++ b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
 @@ -23,6 +23,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
@@ -25,7 +17,7 @@ index 79cdfc8..cafa021 100644
  import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
  import net.minecraft.world.phys.Vec3;
 diff --git a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
-index c893414..54a0548 100644
+index c893414822f4059f35d06fc91beef780e8d77b40..54a054816092d14058dd3902d873a9a66b4a7c3a 100644
 --- a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
 +++ b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
 @@ -13,6 +13,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
@@ -37,7 +29,7 @@ index c893414..54a0548 100644
  import net.minecraft.world.phys.Vec3;
  
 diff --git a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
-index 8cab0e4..3869a96 100644
+index 8cab0e42d672defcce817b220db1a7ed06303d59..3869a960ef24ab2432e099725d9cb2a5306418d9 100644
 --- a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
 +++ b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
 @@ -21,6 +21,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
@@ -49,7 +41,7 @@ index 8cab0e4..3869a96 100644
  import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
  import net.minecraft.world.phys.Vec3;
 diff --git a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
-index 222fd85..8a3cfa2 100644
+index 222fd859ba33db12415801554916e44f0976f65c..8a3cfa22cd267fb2cab23cecf61dcceb4c3275a6 100644
 --- a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
 +++ b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
 @@ -13,6 +13,7 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -61,7 +53,7 @@ index 222fd85..8a3cfa2 100644
  
  public class YieldJobSite {
 diff --git a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
-index f8e8963..7794dea 100644
+index f8e89636e10c8b568ea069919f78b059f2ffc3ec..7794dea3adc8270d261a1b64e0d6f34fdef2f794 100644
 --- a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
 +++ b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
 @@ -7,6 +7,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -73,7 +65,7 @@ index f8e8963..7794dea 100644
  import net.minecraft.world.scores.Team;
  
 diff --git a/net/minecraft/world/entity/animal/sniffer/Sniffer.java b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
-index 5eac6ae..228056d 100644
+index 5eac6ae2591b9359f845cd3c4d7019c5f61284ec..228056d7dab1f4053a6b9754ad28e19f85e0e913 100644
 --- a/net/minecraft/world/entity/animal/sniffer/Sniffer.java
 +++ b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
 @@ -55,6 +55,7 @@ import net.minecraft.world.level.Level;
@@ -84,6 +76,3 @@ index 5eac6ae..228056d 100644
  import net.minecraft.world.level.pathfinder.Path;
  import net.minecraft.world.level.pathfinder.PathType;
  import net.minecraft.world.level.storage.loot.BuiltInLootTables;
--- 
-2.47.3
-

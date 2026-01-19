@@ -1,14 +1,63 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
-Date: Sun, 19 Jan 2026 01:12:00 +0000
+Date: Mon, 19 Jan 2026 01:12:00 +0000
 Subject: [PATCH] Async path service plumbing
 
 
+diff --git a/net/minecraft/server/commands/DebugPathCommand.java b/net/minecraft/server/commands/DebugPathCommand.java
+index f0cfa2fb64e14acadeae70742068b4f100d949a6..98697a7217ef2074e998a33bd62f438f928c39b3 100644
+--- a/net/minecraft/server/commands/DebugPathCommand.java
++++ b/net/minecraft/server/commands/DebugPathCommand.java
+@@ -12,11 +12,13 @@ import net.minecraft.network.protocol.game.DebugPackets;
+ import net.minecraft.world.entity.Mob;
+ import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
+ import net.minecraft.world.entity.ai.navigation.PathNavigation;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
+ 
+ public class DebugPathCommand {
+     private static final SimpleCommandExceptionType ERROR_NOT_MOB = new SimpleCommandExceptionType(Component.literal("Source is not a mob"));
+     private static final SimpleCommandExceptionType ERROR_NO_PATH = new SimpleCommandExceptionType(Component.literal("Path not found"));
++    private static final SimpleCommandExceptionType ERROR_PENDING = new SimpleCommandExceptionType(Component.literal("Path pending"));
+     private static final SimpleCommandExceptionType ERROR_NOT_COMPLETE = new SimpleCommandExceptionType(Component.literal("Target not reached"));
+ 
+     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+@@ -39,6 +41,8 @@ public class DebugPathCommand {
+             DebugPackets.sendPathFindingPacket(stack.getLevel(), mob, path, pathNavigation.getMaxDistanceToWaypoint());
+             if (path == null) {
+                 throw ERROR_NO_PATH.create();
++            } else if (AsyncPath.isPending(path)) {
++                throw ERROR_PENDING.create();
+             } else if (!path.canReach()) {
+                 throw ERROR_NOT_COMPLETE.create();
+             } else {
+diff --git a/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java b/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
+index 86fccf3617a32f3791b03d8067e2eaf6b8d8bebb..448ec2144b97d5a237c519792af789379ed08cf9 100644
+--- a/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
+@@ -10,6 +10,7 @@ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Node;
+ import net.minecraft.world.level.pathfinder.Path;
+ import net.minecraft.world.level.pathfinder.PathFinder;
+@@ -106,6 +107,9 @@ public class GroundPathNavigation extends PathNavigation {
+ 
+     @Override
+     protected void trimPath() {
++        if (AsyncPath.isPending(this.path)) {
++            return;
++        }
+         super.trimPath();
+         if (this.avoidSun) {
+             if (this.level.canSeeSky(BlockPos.containing(this.mob.getX(), this.mob.getY() + 0.5, this.mob.getZ()))) {
 diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index 00bfbe58a3d079568cbdcf5e6795862c398bb701..c285c8930542d390c610a364e662132bff9e74d4 100644
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
-@@ -13,9 +13,10 @@ import java.util.stream.Stream;
- import javax.annotation.Nullable;
+@@ -8,6 +8,7 @@ import javax.annotation.Nullable;
  import net.minecraft.core.BlockPos;
  import net.minecraft.core.Vec3i;
  import net.minecraft.network.protocol.game.DebugPackets;
@@ -16,9 +65,7 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
  import net.minecraft.tags.BlockTags;
  import net.minecraft.util.Mth;
  import net.minecraft.util.profiling.Profiler;
- import net.minecraft.util.profiling.ProfilerFiller;
- import net.minecraft.world.entity.Entity;
-@@ -22,8 +23,10 @@ import net.minecraft.world.level.ClipContext;
+@@ -19,6 +20,8 @@ import net.minecraft.world.level.ClipContext;
  import net.minecraft.world.level.Level;
  import net.minecraft.world.level.PathNavigationRegion;
  import net.minecraft.world.level.block.state.BlockState;
@@ -27,10 +74,7 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
  import net.minecraft.world.level.pathfinder.Node;
  import net.minecraft.world.level.pathfinder.NodeEvaluator;
  import net.minecraft.world.level.pathfinder.Path;
- import net.minecraft.world.level.pathfinder.PathFinder;
- import net.minecraft.world.level.pathfinder.PathType;
-@@ -194,7 +197,21 @@ protected Path createPath(Set<BlockPos> targets, @Nullable Entity target, int re
-             ProfilerFiller profilerFiller = Profiler.get();
+@@ -197,6 +200,20 @@ public abstract class PathNavigation {
              profilerFiller.push("pathfind");
              BlockPos blockPos = offsetUpward ? this.mob.blockPosition().above() : this.mob.blockPosition();
              int i = (int)(followRange + regionOffset);
@@ -51,8 +95,7 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
              PathNavigationRegion pathNavigationRegion = new PathNavigationRegion(this.level, blockPos.offset(-i, -i, -i), blockPos.offset(i, i, i));
              Path path = this.pathFinder.findPath(pathNavigationRegion, this.mob, targets, followRange, accuracy, this.maxVisitedNodesMultiplier);
              profilerFiller.pop();
-@@ -255,7 +268,15 @@ public boolean moveTo(@Nullable Path pathentity, double speed) {
-             if (!pathentity.sameAs(this.path)) {
+@@ -252,6 +269,14 @@ public abstract class PathNavigation {
                  this.path = pathentity;
              }
  
@@ -67,7 +110,7 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
              if (this.isDone()) {
                  return false;
              } else {
-@@ -284,6 +304,15 @@ public Path getPath() {
+@@ -274,6 +299,15 @@ public abstract class PathNavigation {
          return this.path;
      }
  
@@ -83,7 +126,7 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
      public void tick() {
          this.tick++;
          if (this.hasDelayedRecomputation) {
-@@ -291,6 +319,9 @@ public void tick() {
+@@ -281,6 +315,9 @@ public abstract class PathNavigation {
          }
  
          if (!this.isDone()) {
@@ -93,7 +136,8 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
              if (this.canUpdatePath()) {
                  this.followThePath();
              } else if (this.path != null && !this.path.isDone()) {
-@@ -416,5 +447,8 @@ protected abstract boolean canUpdatePath();
+@@ -413,6 +450,9 @@ public abstract class PathNavigation {
+     protected abstract boolean canUpdatePath();
  
      protected void trimPath() {
 +        if (AsyncPath.isPending(this.path)) {
@@ -102,51 +146,3 @@ diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/
          if (this.path != null) {
              for (int i = 0; i < this.path.getNodeCount(); i++) {
                  Node node = this.path.getNode(i);
-diff --git a/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java b/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
---- a/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
-+++ b/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
-@@ -9,9 +9,10 @@ import net.minecraft.world.entity.Mob;
- import net.minecraft.world.level.Level;
- import net.minecraft.world.level.block.Blocks;
- import net.minecraft.world.level.block.state.BlockState;
- import net.minecraft.world.level.chunk.LevelChunk;
-+import net.minecraft.world.level.pathfinder.AsyncPath;
- import net.minecraft.world.level.pathfinder.Node;
- import net.minecraft.world.level.pathfinder.Path;
- import net.minecraft.world.level.pathfinder.PathFinder;
- import net.minecraft.world.level.pathfinder.PathType;
- import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
-@@ -107,6 +108,9 @@ public class GroundPathNavigation extends PathNavigation {
- 
-     @Override
-     protected void trimPath() {
-+        if (AsyncPath.isPending(this.path)) {
-+            return;
-+        }
-         super.trimPath();
-         if (this.avoidSun) {
-             if (this.level.canSeeSky(BlockPos.containing(this.mob.getX(), this.mob.getY() + 0.5, this.mob.getZ()))) {
-diff --git a/net/minecraft/server/commands/DebugPathCommand.java b/net/minecraft/server/commands/DebugPathCommand.java
---- a/net/minecraft/server/commands/DebugPathCommand.java
-+++ b/net/minecraft/server/commands/DebugPathCommand.java
-@@ -12,9 +12,11 @@ import net.minecraft.network.protocol.game.DebugPackets;
- import net.minecraft.world.entity.Mob;
- import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
- import net.minecraft.world.entity.ai.navigation.PathNavigation;
-+import net.minecraft.world.level.pathfinder.AsyncPath;
- import net.minecraft.world.level.pathfinder.Path;
- 
- public class DebugPathCommand {
-     private static final SimpleCommandExceptionType ERROR_NOT_MOB = new SimpleCommandExceptionType(Component.literal("Source is not a mob"));
-     private static final SimpleCommandExceptionType ERROR_NO_PATH = new SimpleCommandExceptionType(Component.literal("Path not found"));
-+    private static final SimpleCommandExceptionType ERROR_PENDING = new SimpleCommandExceptionType(Component.literal("Path pending"));
-     private static final SimpleCommandExceptionType ERROR_NOT_COMPLETE = new SimpleCommandExceptionType(Component.literal("Target not reached"));
-@@ -43,6 +44,8 @@ private static int fillBlocks(CommandSourceStack stack, BlockPos pos) throws Com
-             DebugPackets.sendPathFindingPacket(stack.getLevel(), mob, path, pathNavigation.getMaxDistanceToWaypoint());
-             if (path == null) {
-                 throw ERROR_NO_PATH.create();
-+            } else if (AsyncPath.isPending(path)) {
-+                throw ERROR_PENDING.create();
-             } else if (!path.canReach()) {
-                 throw ERROR_NOT_COMPLETE.create();
-             } else {

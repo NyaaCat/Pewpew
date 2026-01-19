@@ -1,25 +1,11 @@
-From 3df26d3619c2b0141d92c33ad0251ca12db74348 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Mon, 19 Jan 2026 11:21:24 +0000
 Subject: [PATCH] Handle async path pending results
 
----
- .../world/entity/ai/behavior/AcquirePoi.java  | 53 +++++++++++++++++++
- .../ai/behavior/LongJumpToRandomPos.java      | 10 +++-
- .../entity/ai/behavior/MoveToTargetSink.java  |  2 +-
- .../ai/behavior/PrepareRamNearestTarget.java  |  8 ++-
- .../behavior/SetClosestHomeAsWalkTarget.java  | 43 +++++++++++++++
- .../entity/ai/behavior/VillagerMakeLove.java  | 17 +++++-
- .../entity/ai/behavior/YieldJobSite.java      |  8 ++-
- .../entity/ai/goal/target/TargetGoal.java     |  2 +
- .../entity/ai/sensing/NearestBedSensor.java   | 46 +++++++++++++++-
- net/minecraft/world/entity/animal/Bee.java    | 17 ++++--
- .../world/entity/animal/sniffer/Sniffer.java  | 17 ++++--
- net/minecraft/world/entity/raid/Raider.java   |  3 +-
- 12 files changed, 213 insertions(+), 13 deletions(-)
 
 diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-index 57befff..b23f11d 100644
+index 57befff1f0675e889304a6258258384d8de02c87..b23f11dd111a2f7546e0c081bfaa422de756d12b 100644
 --- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 @@ -22,6 +22,8 @@ import net.minecraft.world.entity.ai.behavior.declarative.BehaviorBuilder;
@@ -91,7 +77,7 @@ index 57befff..b23f11d 100644
                                  BlockPos target = path.getTarget();
                                  poiManager.getType(target).ifPresent(holder -> {
 diff --git a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
-index 977afa2..79cdfc8 100644
+index 977afa268838304abdb34be253ca36ac1c22e99f..79cdfc8a82c27e45ba26fe84dd662be64c056226 100644
 --- a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
 +++ b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
 @@ -163,7 +163,15 @@ public class LongJumpToRandomPos<E extends Mob> extends Behavior<E> {
@@ -112,7 +98,7 @@ index 977afa2..79cdfc8 100644
                              this.prepareJumpStart = prepareJumpStart;
                              return;
 diff --git a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
-index 621ba76..c893414 100644
+index 621ba76784f2b92790eca62be4d0688834335ab6..c893414822f4059f35d06fc91beef780e8d77b40 100644
 --- a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
 +++ b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
 @@ -125,7 +125,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
@@ -125,7 +111,7 @@ index 621ba76..c893414 100644
                  brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
              } else if (!brain.hasMemoryValue(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE)) {
 diff --git a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
-index dfd39ff..8cab0e4 100644
+index dfd39ff8f4a17b42bda60f2bcec5ebc163c25954..8cab0e42d672defcce817b220db1a7ed06303d59 100644
 --- a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
 +++ b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
 @@ -163,7 +163,13 @@ public class PrepareRamNearestTarget<E extends PathfinderMob> extends Behavior<E
@@ -144,7 +130,7 @@ index dfd39ff..8cab0e4 100644
          }
      }
 diff --git a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
-index 4f9f336..57d81ec 100644
+index 4f9f3367b1ca3903df03a80fa2b01a3d24e6e77d..57d81ec5ec9401205fe590b50322675948ac454a 100644
 --- a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
 +++ b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
 @@ -17,6 +17,8 @@ import net.minecraft.world.entity.ai.memory.WalkTarget;
@@ -206,7 +192,7 @@ index 4f9f336..57d81ec 100644
                                      BlockPos target = path.getTarget();
                                      Optional<Holder<PoiType>> type = poiManager.getType(target);
 diff --git a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
-index 2591e4b..b33413c 100644
+index 2591e4bbd234e51ff2c6b00db888d3b158f5a07d..b33413c9533a2eb87bac205dc2d70364c87f4a53 100644
 --- a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
 +++ b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
 @@ -15,6 +15,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
@@ -241,7 +227,7 @@ index 2591e4b..b33413c 100644
      }
  
 diff --git a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
-index 44340aa..222fd85 100644
+index 44340aa26bc89faaf8842bb36048cf61dba34314..222fd859ba33db12415801554916e44f0976f65c 100644
 --- a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
 +++ b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
 @@ -80,6 +80,12 @@ public class YieldJobSite {
@@ -259,7 +245,7 @@ index 44340aa..222fd85 100644
      }
  }
 diff --git a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
-index 9ef0095..f8e8963 100644
+index 9ef00958eae124e4a37d0e1ff4e763e04d1414f5..f8e89636e10c8b568ea069919f78b059f2ffc3ec 100644
 --- a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
 +++ b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
 @@ -118,6 +118,8 @@ public abstract class TargetGoal extends Goal {
@@ -272,7 +258,7 @@ index 9ef0095..f8e8963 100644
              Node endNode = path.getEndNode();
              if (endNode == null) {
 diff --git a/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java b/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
-index 066faa7..1518d85 100644
+index 066faa704338c573472381e1ebd063e0d52aaaa4..1518d8532ffd8895f4ec3292313a3840e572d6c4 100644
 --- a/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
 +++ b/net/minecraft/world/entity/ai/sensing/NearestBedSensor.java
 @@ -17,6 +17,8 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
@@ -337,7 +323,7 @@ index 066faa7..1518d85 100644
                  BlockPos target = path.getTarget();
                  Optional<Holder<PoiType>> type = poiManager.getType(target);
 diff --git a/net/minecraft/world/entity/animal/Bee.java b/net/minecraft/world/entity/animal/Bee.java
-index 13f2483..66d855c 100644
+index 13f24836649790a34b988e2d63accb043e6ff080..66d855c6c76e746639c3d1ec9d06b09686aaeee1 100644
 --- a/net/minecraft/world/entity/animal/Bee.java
 +++ b/net/minecraft/world/entity/animal/Bee.java
 @@ -84,6 +84,7 @@ import net.minecraft.world.level.block.state.BlockState;
@@ -386,7 +372,7 @@ index 13f2483..66d855c 100644
                      }
  
 diff --git a/net/minecraft/world/entity/animal/sniffer/Sniffer.java b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
-index 6a9f31c..5eac6ae 100644
+index 6a9f31c1f39cc14ad7b5ae3af85908bc7a4caae4..5eac6ae2591b9359f845cd3c4d7019c5f61284ec 100644
 --- a/net/minecraft/world/entity/animal/sniffer/Sniffer.java
 +++ b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
 @@ -267,9 +267,20 @@ public class Sniffer extends Animal {
@@ -414,7 +400,7 @@ index 6a9f31c..5eac6ae 100644
  
      private void dropSeed() {
 diff --git a/net/minecraft/world/entity/raid/Raider.java b/net/minecraft/world/entity/raid/Raider.java
-index a495789..d1408ae 100644
+index a495789b2d21fa9a24d5dca4ecfa196ddce49466..d1408ae8201abaff4d23cc9019fe63500b71cc0d 100644
 --- a/net/minecraft/world/entity/raid/Raider.java
 +++ b/net/minecraft/world/entity/raid/Raider.java
 @@ -36,6 +36,7 @@ import net.minecraft.world.entity.monster.PatrollingMonster;
@@ -434,6 +420,3 @@ index a495789..d1408ae 100644
                              this.pathToBanner = path;
                              this.pursuedBannerItemEntity = itemEntity;
                              return true;
--- 
-2.47.3
-

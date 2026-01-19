@@ -1,6 +1,6 @@
 --- /dev/null
 +++ b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
-@@ -1,0 +_,165 @@
+@@ -1,0 +_,217 @@
 +package io.papermc.paper.pewpew;
 +
 +import com.google.common.base.Throwables;
