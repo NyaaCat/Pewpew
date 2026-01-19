@@ -1,0 +1,25 @@
+From 09c9ff589925f65a9d57643473332c58885fc4ee Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Mon, 19 Jan 2026 18:50:22 +0000
+Subject: [PATCH] Fix quart biome cache key packing
+
+---
+ net/minecraft/world/level/NaturalSpawner.java | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
+index 61014e0..56fd07d 100644
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -724,7 +724,7 @@ public final class NaturalSpawner {
+             int quartX = QuartPos.fromBlock(pos.getX());
+             int quartY = QuartPos.fromBlock(pos.getY());
+             int quartZ = QuartPos.fromBlock(pos.getZ());
+-            long key = QuartPos.asLong(quartX, quartY, quartZ);
++            long key = BlockPos.asLong(quartX, quartY, quartZ);
+             Holder<Biome> cached = this.biomeCache.get(key);
+             if (cached != null) {
+                 return cached;
+-- 
+2.47.3
+
