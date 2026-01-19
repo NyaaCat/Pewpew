@@ -156,6 +156,24 @@
 - Implemented spawn snapshot cache for natural spawns (`pewpew.spawnSnapshotCache`) and generated minecraft patch `0015-Spawn-snapshot-cache-for-natural-spawns.patch`.
 - Added missing AsyncPath imports for pending-path checks and generated patch `0016-Add-AsyncPath-imports-for-pending-checks.patch`.
 - `pewpew-server:compileJava` succeeds after patch refresh (warnings only).
+- Ran a multiworld benchmark with world tick coordinator enabled; summary stored at `tmp/bench/runs/20260119-134248-3247799-multiworld/pewpew/plugins/PewpewBench/bench-summary.json` (avgMspt ~15.58, avgTps ~18.61).
+- Investigated shipwreck treasure map reports: `ExplorationMapFunction` leaves an empty map when it cannot locate a structure or when treasure maps are disabled; shipwreck map loot tables also include a separate pool that can roll a normal `Items.MAP`.
+- Reviewed profiler-v23/v24 for movement/collision: collision/movement costs are minor compared to AI/pathfinding (e.g., `LivingEntity.travel`/`pushEntities`/`applyEffectsFromBlocks` ~1–2ms total in v24); collision path already uses Moonrise `CollisionUtil` fast paths, so snapshot-based collision read caching is unlikely to help and risks stale-state issues with dynamic blocks.
+- Confirmed v23/v24 profiler inputs are old Paper (not Pewpew); next optimization targets to validate on Pewpew are entity AI/pathing snapshot overhead and natural spawn scanning.
+- Began production-world A/B profiling run; bots were kicked due to missing datapack errors in the copied world, and the server was stopped to regroup.
+- Completed production-world A/B profiling runs with 16 bots, keepalive set to 600s, sequential teleports across a 4x4 grid; profiles captured at `tmp/bench/prod-profile-20260119-163445-benchworld/off/profile-off.txt` and `tmp/bench/prod-profile-20260119-163445-benchworld/on/profile-on.txt`.
+- Started a 64-bot production-world run (`tmp/bench/prod-profile-20260119-165903-benchworld64`) and captured an initial off profile, but most bots disconnected due to mineflayer `PartialReadError`/`Invalid tag` protocol parse errors; rerun needed with adjusted bot/load settings.
+- Aborted the unstable 64-bot run (stopped server/bots) and shifted to analysis of the stable 16-bot profiles (`tmp/bench/prod-profile-20260119-163445-benchworld/off/profile-off.txt` + `.../on/profile-on.txt`).
+- Wrote a detailed production-world optimization plan based on the v6 profiles in `docs/pewpew/plans/prod-world-optimizations.md`.
+- Started step 1 (spawn block-state access fast path):
+  - `NaturalSpawner.spawnCategoryForPosition` now uses snapshot-aware helpers for `getBlockStateIfLoadedAndInBounds` and `isLoadedAndInBounds`.
+  - `PalettedContainer` copy now primes the fast palette cache for copied containers.
+- Re-ran 16-bot production profiling with tree output after step 1; profiles captured at:
+  - `tmp/bench/prod-profile-20260119-181200-benchworld16-tree/off/profile-off-tree.html`
+  - `tmp/bench/prod-profile-20260119-181200-benchworld16-tree/on/profile-on-tree.html`
+  - Observed drops in spawn path hot functions vs the earlier v6 profiles (e.g., `Level.getBlockStateIfLoadedAndInBounds` ~10-11% -> ~3%, `PalettedContainer.get` ~7-8% -> ~2%).
+- Updated root `README.md` patch workflow with the stable tmp-based patch generation process.
+- Exported step 1 changes into a new Minecraft patch (`pewpew-server/minecraft-patches/features/0018-Use-spawn-snapshots-for-block-state-reads.patch`), re-applied patches, and rebuilt the mojmap paperclip jar to confirm it is included.
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
@@ -164,3 +182,6 @@
 4) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
 5) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
 6) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
+7) Stabilize 64-bot production profiling by reducing chunk/network load (e.g., lower view/simulation distance, slower joins, or split bot processes), then re-run off/on profiles.
+8) Draft and execute a surgical optimization plan from the production profiles, focused on low-level block-state/biome/player-distance hot paths in natural spawning and block-entity ticking.
+9) Continue step 2 (spawn biome lookup cache) and re-profile to confirm reduced `SpawnSnapshotLevelReader.getBiome`/`BiomeManager.getBiome` cost.
