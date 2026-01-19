@@ -31,6 +31,7 @@ Environment overrides:
 - `BENCH_PEWPEW_JAVA_OPTS` (default: `-Dpewpew.asyncPathfinding=true -Dpewpew.asyncSensors=true`)
 - `BENCH_PEWPEW_FEATURE_ASYNC_PATHFINDING` (default: `true`)
 - `BENCH_PEWPEW_FEATURE_ASYNC_SENSORS` (default: `true`)
+- `BENCH_PEWPEW_FEATURE_SPAWN_SNAPSHOT_CACHE` (default: `false`)
 - `BENCH_PEWPEW_FEATURE_WORLD_TICK_COORDINATOR` (default: `false`)
 - `BENCH_PEWPEW_FEATURE_WORLD_TICK_COORDINATOR_TESTING` (default: `false`)
 - `BENCH_PEWPEW_FEATURE_ASYNC_POOL_TESTING` (default: `false`)

@@ -1,0 +1,89 @@
+From 5a6bbabee6b29b3dc0e0b2afb299f4222dcf8295 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Mon, 19 Jan 2026 11:33:21 +0000
+Subject: [PATCH] Add AsyncPath imports for pending checks
+
+---
+ net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java  | 1 +
+ net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java     | 1 +
+ .../world/entity/ai/behavior/PrepareRamNearestTarget.java        | 1 +
+ net/minecraft/world/entity/ai/behavior/YieldJobSite.java         | 1 +
+ net/minecraft/world/entity/ai/goal/target/TargetGoal.java        | 1 +
+ net/minecraft/world/entity/animal/sniffer/Sniffer.java           | 1 +
+ 6 files changed, 6 insertions(+)
+
+diff --git a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
+index 79cdfc8..cafa021 100644
+--- a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
++++ b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
+@@ -23,6 +23,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
+ import net.minecraft.world.entity.ai.navigation.PathNavigation;
+ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
+ import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+ import net.minecraft.world.phys.Vec3;
+diff --git a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
+index c893414..54a0548 100644
+--- a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
++++ b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
+@@ -13,6 +13,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
+ import net.minecraft.world.entity.ai.memory.WalkTarget;
+ import net.minecraft.world.entity.ai.navigation.PathNavigation;
+ import net.minecraft.world.entity.ai.util.DefaultRandomPos;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
+ import net.minecraft.world.phys.Vec3;
+ 
+diff --git a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
+index 8cab0e4..3869a96 100644
+--- a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
++++ b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
+@@ -21,6 +21,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
+ import net.minecraft.world.entity.ai.memory.WalkTarget;
+ import net.minecraft.world.entity.ai.navigation.PathNavigation;
+ import net.minecraft.world.entity.ai.targeting.TargetingConditions;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
+ import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
+ import net.minecraft.world.phys.Vec3;
+diff --git a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
+index 222fd85..8a3cfa2 100644
+--- a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
++++ b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
+@@ -13,6 +13,7 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+ import net.minecraft.world.entity.ai.village.poi.PoiType;
+ import net.minecraft.world.entity.npc.Villager;
+ import net.minecraft.world.entity.npc.VillagerProfession;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
+ 
+ public class YieldJobSite {
+diff --git a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
+index f8e8963..7794dea 100644
+--- a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
++++ b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
+@@ -7,6 +7,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
+ import net.minecraft.world.entity.ai.goal.Goal;
+ import net.minecraft.world.entity.ai.targeting.TargetingConditions;
+ import net.minecraft.world.level.pathfinder.Node;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
+ import net.minecraft.world.scores.Team;
+ 
+diff --git a/net/minecraft/world/entity/animal/sniffer/Sniffer.java b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
+index 5eac6ae..228056d 100644
+--- a/net/minecraft/world/entity/animal/sniffer/Sniffer.java
++++ b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
+@@ -55,6 +55,7 @@ import net.minecraft.world.level.Level;
+ import net.minecraft.world.level.block.RenderShape;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.gameevent.GameEvent;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
+ import net.minecraft.world.level.pathfinder.PathType;
+ import net.minecraft.world.level.storage.loot.BuiltInLootTables;
+-- 
+2.47.3
+

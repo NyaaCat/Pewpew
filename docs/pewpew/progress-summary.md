@@ -150,11 +150,15 @@
 - Reviewed `tmp/profiler-v23.txt` and `tmp/profiler-v24.txt`: entity tick dominates; v23 shows zombie melee pathfinding on main thread; v24 shows villager Brain/behavior tick + spawn checks + fluid ticks dominating. Suspect async pathing in reachability-only behaviors (AcquirePoi/bed/home) can leave villagers idle; plan to gate async pathing to navigation-driven calls or add async callbacks to set memory targets.
 - Added async POI path callbacks and pending-aware handling for villager bed/home/jobsite logic (AcquirePoi, NearestBedSensor, SetClosestHomeAsWalkTarget), plus sync pathing in VillagerMakeLove to avoid async reachability. Added monster sync-fallback toggle in config and PathNavigation.
 - Reviewed natural spawn pipeline (`ServerChunkCache.tickChunks` → `NaturalSpawner.spawnForChunk`) and identified snapshot candidates: spawn position validation (`SpawnPlacements.isSpawnPositionOk`/`checkSpawnRules`), `getTopNonCollidingPos` block-state scans, and biome/spawn-list lookups per chunk; potential improvement is a per-tick chunk snapshot (block/fluids + heightmap/biome) to share across spawn attempts and enable async candidate selection.
+- Repaired patch file formatting errors by regenerating `0013-Handle-async-path-pending.patch` and cleaning `0012-Async-path-service-plumbing.patch` + `0017-Invalidate-async-caches-on-world-unload.patch`; `:pewpew-server:applyAllServerPatches` succeeds again.
+- Implemented spawn snapshot cache for natural spawns (`pewpew.spawnSnapshotCache`) and generated minecraft patch `0015-Spawn-snapshot-cache-for-natural-spawns.patch`.
+- Added missing AsyncPath imports for pending-path checks and generated patch `0016-Add-AsyncPath-imports-for-pending-checks.patch`.
+- `pewpew-server:compileJava` succeeds after patch refresh (warnings only).
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
 2) Validate villager AI behavior under live gameplay and decide whether to default monster sync fallback to false.
-3) Prototype a spawn snapshot cache for NaturalSpawner and quantify impact on spawn tick time.
+3) Run A/B benchmarks for spawn snapshot cache (on/off) and quantify spawn tick impact.
 4) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
 5) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
 6) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).

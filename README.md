@@ -24,6 +24,8 @@ any behavior-changing optimizations are opt-in and documented.
 ## Build
 - `./gradlew build`
 - `./gradlew :pewpew-server:runDevServer`
+- Production jar (mojmap paperclip): `./gradlew :pewpew-server:createMojmapPaperclipJar`
+  - Output: `pewpew-server/build/libs/pewpew-paperclip-*-mojmap.jar`
 
 ## Benchmarking
 - The bench plugin lives in `NyaaCat/pewpew-bench-plugin` (standalone repo).

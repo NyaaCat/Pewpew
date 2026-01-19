@@ -1,0 +1,474 @@
+From bb4b872bf07358beac7505c82d3de48ed370efe0 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Mon, 19 Jan 2026 11:27:18 +0000
+Subject: [PATCH] Spawn snapshot cache for natural spawns
+
+---
+ net/minecraft/world/level/NaturalSpawner.java | 314 +++++++++++++++++-
+ 1 file changed, 304 insertions(+), 10 deletions(-)
+
+diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
+index 4f64750..15b11bc 100644
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -1,10 +1,12 @@
+ package net.minecraft.world.level;
+ 
+ import com.mojang.logging.LogUtils;
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+ import it.unimi.dsi.fastutil.objects.Object2IntMap;
+ import it.unimi.dsi.fastutil.objects.Object2IntMaps;
+ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+ import java.util.ArrayList;
++import java.util.Arrays;
+ import java.util.List;
+ import java.util.Objects;
+ import java.util.Optional;
+@@ -15,6 +17,7 @@ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.Direction;
+ import net.minecraft.core.Holder;
+ import net.minecraft.core.QuartPos;
++import net.minecraft.core.RegistryAccess;
+ import net.minecraft.core.registries.BuiltInRegistries;
+ import net.minecraft.core.registries.Registries;
+ import net.minecraft.server.level.ServerLevel;
+@@ -26,6 +29,7 @@ import net.minecraft.util.VisibleForDebug;
+ import net.minecraft.util.profiling.Profiler;
+ import net.minecraft.util.profiling.ProfilerFiller;
+ import net.minecraft.util.random.WeightedList;
++import net.minecraft.world.flag.FeatureFlagSet;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.EntitySpawnReason;
+ import net.minecraft.world.entity.EntityType;
+@@ -35,18 +39,28 @@ import net.minecraft.world.entity.SpawnGroupData;
+ import net.minecraft.world.entity.SpawnPlacements;
+ import net.minecraft.world.entity.player.Player;
+ import net.minecraft.world.level.biome.Biome;
++import net.minecraft.world.level.biome.BiomeManager;
+ import net.minecraft.world.level.biome.MobSpawnSettings;
+ import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.entity.BlockEntity;
+ import net.minecraft.world.level.block.state.BlockState;
+ import net.minecraft.world.level.chunk.ChunkAccess;
+ import net.minecraft.world.level.chunk.ChunkGenerator;
+ import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.PalettedContainer;
++import net.minecraft.world.level.chunk.status.ChunkStatus;
++import net.minecraft.world.level.dimension.DimensionType;
++import net.minecraft.world.level.lighting.LevelLightEngine;
+ import net.minecraft.world.level.levelgen.Heightmap;
+ import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
+ import net.minecraft.world.level.levelgen.structure.Structure;
+ import net.minecraft.world.level.levelgen.structure.structures.NetherFortressStructure;
+ import net.minecraft.world.level.material.FluidState;
++import net.minecraft.world.level.border.WorldBorder;
++import net.minecraft.world.phys.AABB;
+ import net.minecraft.world.phys.Vec3;
++import net.minecraft.world.phys.shapes.VoxelShape;
+ import org.slf4j.Logger;
+ 
+ public final class NaturalSpawner {
+@@ -56,6 +70,7 @@ public final class NaturalSpawner {
+     public static final int SPAWN_DISTANCE_BLOCK = 128;
+     public static final int INSCRIBED_SQUARE_SPAWN_DISTANCE_CHUNK = Mth.floor(8.0F / Mth.SQRT_OF_TWO);
+     static final int MAGIC_NUMBER = (int)Math.pow(17.0, 2.0);
++    private static final String SPAWN_SNAPSHOT_CACHE_PROPERTY = "pewpew.spawnSnapshotCache";
+     public static final MobCategory[] SPAWNING_CATEGORIES = Stream.of(MobCategory.values())
+         .filter(category -> category != MobCategory.MISC)
+         .toArray(MobCategory[]::new);
+@@ -154,6 +169,7 @@ public final class NaturalSpawner {
+     public static void spawnForChunk(ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnState spawnState, List<MobCategory> categories) {
+         ProfilerFiller profilerFiller = Profiler.get();
+         profilerFiller.push("spawner");
++        SpawnChunkSnapshot snapshot = SpawnChunkSnapshot.create(level, chunk);
+ 
+         for (MobCategory mobCategory : categories) {
+             // Paper start - Optional per player mob spawns
+@@ -185,7 +201,7 @@ public final class NaturalSpawner {
+             }
+             if (canSpawn) {
+                 spawnCategoryForChunk(mobCategory, level, chunk, spawnState::canSpawn, spawnState::afterSpawn,
+-                    maxSpawns, level.paperConfig().entities.spawning.perPlayerMobSpawns ? level.getChunkSource().chunkMap::updatePlayerMobTypeMap : null);
++                    maxSpawns, level.paperConfig().entities.spawning.perPlayerMobSpawns ? level.getChunkSource().chunkMap::updatePlayerMobTypeMap : null, snapshot);
+                 // Paper end - Optional per player mob spawns
+             }
+         }
+@@ -211,11 +227,24 @@ public final class NaturalSpawner {
+     }
+     public static void spawnCategoryForChunk(
+         MobCategory category, ServerLevel level, LevelChunk chunk, NaturalSpawner.SpawnPredicate filter, NaturalSpawner.AfterSpawnCallback callback, final int maxSpawns, final Consumer<Entity> trackEntity
++    ) {
++        spawnCategoryForChunk(category, level, chunk, filter, callback, maxSpawns, trackEntity, null);
++    }
++
++    private static void spawnCategoryForChunk(
++        MobCategory category,
++        ServerLevel level,
++        LevelChunk chunk,
++        NaturalSpawner.SpawnPredicate filter,
++        NaturalSpawner.AfterSpawnCallback callback,
++        final int maxSpawns,
++        final Consumer<Entity> trackEntity,
++        @Nullable SpawnChunkSnapshot snapshot
+     ) {
+         // Paper end - Optional per player mob spawns
+         BlockPos randomPosWithin = getRandomPosWithin(level, chunk);
+         if (randomPosWithin.getY() >= level.getMinY() + 1) {
+-            spawnCategoryForPosition(category, level, chunk, randomPosWithin, filter, callback, maxSpawns, trackEntity); // Paper - Optional per player mob spawns
++            spawnCategoryForPosition(category, level, chunk, randomPosWithin, filter, callback, maxSpawns, trackEntity, snapshot); // Paper - Optional per player mob spawns
+         }
+     }
+ 
+@@ -236,10 +265,25 @@ public final class NaturalSpawner {
+     }
+     public static void spawnCategoryForPosition(
+         MobCategory category, ServerLevel level, ChunkAccess chunk, BlockPos pos, NaturalSpawner.SpawnPredicate filter, NaturalSpawner.AfterSpawnCallback callback, final int maxSpawns, final @Nullable Consumer<Entity> trackEntity
++    ) {
++        spawnCategoryForPosition(category, level, chunk, pos, filter, callback, maxSpawns, trackEntity, null);
++    }
++
++    private static void spawnCategoryForPosition(
++        MobCategory category,
++        ServerLevel level,
++        ChunkAccess chunk,
++        BlockPos pos,
++        NaturalSpawner.SpawnPredicate filter,
++        NaturalSpawner.AfterSpawnCallback callback,
++        final int maxSpawns,
++        final @Nullable Consumer<Entity> trackEntity,
++        @Nullable SpawnChunkSnapshot snapshot
+     ) {
+         // Paper end - Optional per player mob spawns
+         StructureManager structureManager = level.structureManager();
+         ChunkGenerator generator = level.getChunkSource().getGenerator();
++        LevelReader spawnLevel = snapshot != null ? snapshot.levelReader : level;
+         int y = pos.getY();
+         BlockState blockState = level.getBlockStateIfLoadedAndInBounds(pos); // Paper - don't load chunks for mob spawn
+         if (blockState != null && !blockState.isRedstoneConductor(chunk, pos)) { // Paper - don't load chunks for mob spawn
+@@ -267,7 +311,7 @@ public final class NaturalSpawner {
+                         if (level.isLoadedAndInBounds(mutableBlockPos) && isRightDistanceToPlayerAndSpawnPoint(level, chunk, mutableBlockPos, d2)) { // Paper - don't load chunks for mob spawn
+                             if (spawnerData == null) {
+                                 Optional<MobSpawnSettings.SpawnerData> randomSpawnMobAt = getRandomSpawnMobAt(
+-                                    level, structureManager, generator, category, level.random, mutableBlockPos
++                                    level, structureManager, generator, category, level.random, mutableBlockPos, spawnLevel
+                                 );
+                                 if (randomSpawnMobAt.isEmpty()) {
+                                     break;
+@@ -278,7 +322,7 @@ public final class NaturalSpawner {
+                             }
+ 
+                             // Paper start - PreCreatureSpawnEvent
+-                            PreSpawnStatus doSpawning = isValidSpawnPostitionForType(level, category, structureManager, generator, spawnerData, mutableBlockPos, d2);
++                            PreSpawnStatus doSpawning = isValidSpawnPostitionForType(level, spawnLevel, category, structureManager, generator, spawnerData, mutableBlockPos, d2);
+                             // Paper start - per player mob count backoff
+                             if (doSpawning == PreSpawnStatus.ABORT || doSpawning == PreSpawnStatus.CANCELLED) {
+                                 level.getChunkSource().chunkMap.updateFailurePlayerMobTypeMap(mutableBlockPos.getX() >> 4, mutableBlockPos.getZ() >> 4, category);
+@@ -351,6 +395,7 @@ public final class NaturalSpawner {
+     private static PreSpawnStatus isValidSpawnPostitionForType(
+     // Paper end - PreCreatureSpawnEvent
+         ServerLevel level,
++        @Nullable LevelReader spawnLevel,
+         MobCategory category,
+         StructureManager structureManager,
+         ChunkGenerator generator,
+@@ -359,6 +404,7 @@ public final class NaturalSpawner {
+         double distance
+     ) {
+         EntityType<?> entityType = data.type();
++        LevelReader placementLevel = spawnLevel != null ? spawnLevel : level;
+         // Paper start - PreCreatureSpawnEvent
+         com.destroystokyo.paper.event.entity.PreCreatureSpawnEvent event = new com.destroystokyo.paper.event.entity.PreCreatureSpawnEvent(
+                 org.bukkit.craftbukkit.util.CraftLocation.toBukkit(pos, level),
+@@ -377,8 +423,8 @@ public final class NaturalSpawner {
+                     || !(distance > entityType.getCategory().getDespawnDistance() * entityType.getCategory().getDespawnDistance())
+             )
+             && entityType.canSummon()
+-            && canSpawnMobAt(level, structureManager, generator, category, data, pos)
+-            && SpawnPlacements.isSpawnPositionOk(entityType, level, pos)
++            && canSpawnMobAt(level, structureManager, generator, category, data, pos, spawnLevel)
++            && SpawnPlacements.isSpawnPositionOk(entityType, placementLevel, pos)
+             && SpawnPlacements.checkSpawnRules(entityType, level, EntitySpawnReason.NATURAL, pos, level.random)
+             && level.noCollision(entityType.getSpawnAABB(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5));
+         return success ? PreSpawnStatus.SUCCESS : PreSpawnStatus.FAIL; // Paper - PreCreatureSpawnEvent
+@@ -410,18 +456,31 @@ public final class NaturalSpawner {
+     }
+ 
+     private static Optional<MobSpawnSettings.SpawnerData> getRandomSpawnMobAt(
+-        ServerLevel level, StructureManager structureManager, ChunkGenerator generator, MobCategory category, RandomSource random, BlockPos pos
++        ServerLevel level,
++        StructureManager structureManager,
++        ChunkGenerator generator,
++        MobCategory category,
++        RandomSource random,
++        BlockPos pos,
++        @Nullable LevelReader spawnLevel
+     ) {
+-        Holder<Biome> biome = level.getBiome(pos);
++        Holder<Biome> biome = spawnLevel != null ? spawnLevel.getBiome(pos) : level.getBiome(pos);
+         return category == MobCategory.WATER_AMBIENT && biome.is(BiomeTags.REDUCED_WATER_AMBIENT_SPAWNS) && random.nextFloat() < 0.98F
+             ? Optional.empty()
+             : mobsAt(level, structureManager, generator, category, pos, biome).getRandom(random);
+     }
+ 
+     private static boolean canSpawnMobAt(
+-        ServerLevel level, StructureManager structureManager, ChunkGenerator generator, MobCategory category, MobSpawnSettings.SpawnerData data, BlockPos pos
++        ServerLevel level,
++        StructureManager structureManager,
++        ChunkGenerator generator,
++        MobCategory category,
++        MobSpawnSettings.SpawnerData data,
++        BlockPos pos,
++        @Nullable LevelReader spawnLevel
+     ) {
+-        return mobsAt(level, structureManager, generator, category, pos, null).contains(data);
++        Holder<Biome> biome = spawnLevel != null ? spawnLevel.getBiome(pos) : null;
++        return mobsAt(level, structureManager, generator, category, pos, biome).contains(data);
+     }
+ 
+     private static WeightedList<MobSpawnSettings.SpawnerData> mobsAt(
+@@ -555,6 +614,241 @@ public final class NaturalSpawner {
+         return SpawnPlacements.getPlacementType(entityType).adjustSpawnPosition(level, mutableBlockPos.immutable());
+     }
+ 
++    private static final class SpawnChunkSnapshot {
++        private final ServerLevel level;
++        private final LevelChunk chunk;
++        private final int minBlockX;
++        private final int maxBlockX;
++        private final int minBlockZ;
++        private final int maxBlockZ;
++        private final PalettedContainer<BlockState>[] sectionStates;
++        private final long[] sectionVersions;
++        private final Long2ObjectOpenHashMap<Holder<Biome>> biomeCache = new Long2ObjectOpenHashMap<>();
++        private final SpawnSnapshotLevelReader levelReader;
++
++        private SpawnChunkSnapshot(ServerLevel level, LevelChunk chunk) {
++            this.level = level;
++            this.chunk = chunk;
++            ChunkPos pos = chunk.getPos();
++            this.minBlockX = pos.getMinBlockX();
++            this.maxBlockX = pos.getMaxBlockX();
++            this.minBlockZ = pos.getMinBlockZ();
++            this.maxBlockZ = pos.getMaxBlockZ();
++            this.sectionStates = new PalettedContainer[chunk.getSections().length];
++            this.sectionVersions = new long[this.sectionStates.length];
++            Arrays.fill(this.sectionVersions, Long.MIN_VALUE);
++            this.levelReader = new SpawnSnapshotLevelReader(level, this);
++        }
++
++        @Nullable
++        private static SpawnChunkSnapshot create(ServerLevel level, LevelChunk chunk) {
++            return Boolean.getBoolean(SPAWN_SNAPSHOT_CACHE_PROPERTY) ? new SpawnChunkSnapshot(level, chunk) : null;
++        }
++
++        private boolean contains(BlockPos pos) {
++            return this.containsXZ(pos.getX(), pos.getZ());
++        }
++
++        private boolean containsXZ(int x, int z) {
++            return x >= this.minBlockX && x <= this.maxBlockX && z >= this.minBlockZ && z <= this.maxBlockZ;
++        }
++
++        private BlockState getBlockState(BlockPos pos) {
++            if (!this.contains(pos)) {
++                return this.level.getBlockState(pos);
++            }
++            if (this.chunk.isOutsideBuildHeight(pos)) {
++                return Blocks.AIR.defaultBlockState();
++            }
++            int sectionIndex = this.chunk.getSectionIndex(pos.getY());
++            if (sectionIndex < 0 || sectionIndex >= this.sectionStates.length) {
++                return Blocks.AIR.defaultBlockState();
++            }
++            LevelChunkSection section = this.chunk.getSection(sectionIndex);
++            if (section.hasOnlyAir()) {
++                return Blocks.AIR.defaultBlockState();
++            }
++            long version = section.getChangeVersion();
++            PalettedContainer<BlockState> states = this.sectionStates[sectionIndex];
++            if (states == null || this.sectionVersions[sectionIndex] != version) {
++                states = section.states.copy();
++                this.sectionStates[sectionIndex] = states;
++                this.sectionVersions[sectionIndex] = version;
++            }
++            return states.get(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15);
++        }
++
++        @Nullable
++        private BlockState getBlockStateIfLoaded(BlockPos pos) {
++            if (!this.contains(pos)) {
++                return this.level.getBlockStateIfLoaded(pos);
++            }
++            return this.getBlockState(pos);
++        }
++
++        private FluidState getFluidState(BlockPos pos) {
++            return this.getBlockState(pos).getFluidState();
++        }
++
++        @Nullable
++        private FluidState getFluidIfLoaded(BlockPos pos) {
++            BlockState state = this.getBlockStateIfLoaded(pos);
++            return state == null ? null : state.getFluidState();
++        }
++
++        private Holder<Biome> getBiome(BlockPos pos) {
++            if (!this.contains(pos)) {
++                return this.level.getBiome(pos);
++            }
++            long key = pos.asLong();
++            Holder<Biome> cached = this.biomeCache.get(key);
++            if (cached != null) {
++                return cached;
++            }
++            Holder<Biome> biome = this.chunk.getNoiseBiome(
++                QuartPos.fromBlock(pos.getX()),
++                QuartPos.fromBlock(pos.getY()),
++                QuartPos.fromBlock(pos.getZ())
++            );
++            this.biomeCache.put(key, biome);
++            return biome;
++        }
++
++        private int getHeight(Heightmap.Types type, int x, int z) {
++            return this.chunk.getHeight(type, x, z);
++        }
++    }
++
++    private static final class SpawnSnapshotLevelReader implements LevelReader {
++        private final ServerLevel level;
++        private final SpawnChunkSnapshot snapshot;
++
++        private SpawnSnapshotLevelReader(ServerLevel level, SpawnChunkSnapshot snapshot) {
++            this.level = level;
++            this.snapshot = snapshot;
++        }
++
++        @Override
++        public BlockEntity getBlockEntity(BlockPos pos) {
++            return this.level.getBlockEntity(pos);
++        }
++
++        @Override
++        public BlockState getBlockState(BlockPos pos) {
++            return this.snapshot.contains(pos) ? this.snapshot.getBlockState(pos) : this.level.getBlockState(pos);
++        }
++
++        @Override
++        public @Nullable BlockState getBlockStateIfLoaded(BlockPos pos) {
++            return this.snapshot.contains(pos) ? this.snapshot.getBlockStateIfLoaded(pos) : this.level.getBlockStateIfLoaded(pos);
++        }
++
++        @Override
++        public @Nullable FluidState getFluidIfLoaded(BlockPos pos) {
++            return this.snapshot.contains(pos) ? this.snapshot.getFluidIfLoaded(pos) : this.level.getFluidIfLoaded(pos);
++        }
++
++        @Override
++        public FluidState getFluidState(BlockPos pos) {
++            return this.snapshot.contains(pos) ? this.snapshot.getFluidState(pos) : this.level.getFluidState(pos);
++        }
++
++        @Override
++        public int getHeight(Heightmap.Types heightmapType, int x, int z) {
++            return this.snapshot.containsXZ(x, z) ? this.snapshot.getHeight(heightmapType, x, z) : this.level.getHeight(heightmapType, x, z);
++        }
++
++        @Override
++        public Holder<Biome> getBiome(BlockPos pos) {
++            return this.snapshot.contains(pos) ? this.snapshot.getBiome(pos) : this.level.getBiome(pos);
++        }
++
++        @Override
++        public ChunkAccess getChunk(int x, int z, ChunkStatus chunkStatus, boolean requireChunk) {
++            return this.level.getChunk(x, z, chunkStatus, requireChunk);
++        }
++
++        @Override
++        public @Nullable ChunkAccess getChunkIfLoadedImmediately(int x, int z) {
++            return this.level.getChunkIfLoadedImmediately(x, z);
++        }
++
++        @Override
++        public boolean hasChunk(int chunkX, int chunkZ) {
++            return this.level.hasChunk(chunkX, chunkZ);
++        }
++
++        @Override
++        public int getSkyDarken() {
++            return this.level.getSkyDarken();
++        }
++
++        @Override
++        public BiomeManager getBiomeManager() {
++            return this.level.getBiomeManager();
++        }
++
++        @Override
++        public Holder<Biome> getUncachedNoiseBiome(int x, int y, int z) {
++            return this.level.getUncachedNoiseBiome(x, y, z);
++        }
++
++        @Override
++        public RegistryAccess registryAccess() {
++            return this.level.registryAccess();
++        }
++
++        @Override
++        public FeatureFlagSet enabledFeatures() {
++            return this.level.enabledFeatures();
++        }
++
++        @Override
++        public boolean isClientSide() {
++            return this.level.isClientSide();
++        }
++
++        @Override
++        public int getSeaLevel() {
++            return this.level.getSeaLevel();
++        }
++
++        @Override
++        public DimensionType dimensionType() {
++            return this.level.dimensionType();
++        }
++
++        @Override
++        public float getShade(Direction direction, boolean shade) {
++            return this.level.getShade(direction, shade);
++        }
++
++        @Override
++        public LevelLightEngine getLightEngine() {
++            return this.level.getLightEngine();
++        }
++
++        @Override
++        public int getBlockTint(BlockPos blockPos, ColorResolver colorResolver) {
++            return this.level.getBlockTint(blockPos, colorResolver);
++        }
++
++        @Override
++        public WorldBorder getWorldBorder() {
++            return this.level.getWorldBorder();
++        }
++
++        @Override
++        public List<VoxelShape> getEntityCollisions(@Nullable Entity entity, AABB collisionBox) {
++            return this.level.getEntityCollisions(entity, collisionBox);
++        }
++
++        @Override
++        public BlockGetter getChunkForCollisions(int chunkX, int chunkZ) {
++            return this.level.getChunkForCollisions(chunkX, chunkZ);
++        }
++    }
++
+     @FunctionalInterface
+     public interface AfterSpawnCallback {
+         void run(Mob mob, ChunkAccess chunk);
+-- 
+2.47.3
+

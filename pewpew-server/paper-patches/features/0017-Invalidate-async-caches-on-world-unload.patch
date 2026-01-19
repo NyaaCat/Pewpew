@@ -15,7 +15,7 @@ index 12d98f0..491417b 100644
  import io.papermc.paper.pewpew.WorldTickCoordinator;
  import io.papermc.paper.configuration.PaperServerConfiguration;
  import io.papermc.paper.configuration.ServerConfiguration;
-@@ -70,6 +71,8 @@ import net.minecraft.server.dedicated.DedicatedServer;
+@@ -70,6 +71,7 @@ import net.minecraft.server.dedicated.DedicatedServer;
  import net.minecraft.server.dedicated.DedicatedServerProperties;
  import net.minecraft.server.dedicated.DedicatedServerSettings;
  import net.minecraft.server.level.ServerLevel;
@@ -23,7 +23,7 @@ index 12d98f0..491417b 100644
  import net.minecraft.server.level.ServerPlayer;
  import net.minecraft.server.level.TicketType;
  import net.minecraft.server.players.IpBanListEntry;
-@@ -1469,6 +1472,11 @@ public final class CraftServer implements Server {
+@@ -1469,6 +1472,10 @@ public final class CraftServer implements Server {
  
          this.worlds.remove(world.getName().toLowerCase(Locale.ROOT));
          this.console.removeLevel(handle);

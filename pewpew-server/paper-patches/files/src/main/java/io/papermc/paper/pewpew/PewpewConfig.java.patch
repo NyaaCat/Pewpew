@@ -28,6 +28,7 @@
 +
 +    public static boolean asyncPathfinding;
 +    public static boolean asyncSensors;
++    public static boolean spawnSnapshotCache;
 +    public static boolean worldTickCoordinator;
 +    public static boolean worldTickCoordinatorTesting;
 +    public static boolean asyncPoolTesting;
@@ -65,6 +66,7 @@
 +
 +        asyncPathfinding = getBoolean("features.async-pathfinding", false);
 +        asyncSensors = getBoolean("features.async-sensors", false);
++        spawnSnapshotCache = getBoolean("features.spawn-snapshot-cache", false);
 +        worldTickCoordinator = getBoolean("features.world-tick-coordinator", false);
 +        worldTickCoordinatorTesting = getBoolean("features.world-tick-coordinator-testing", false);
 +        asyncPoolTesting = getBoolean("features.async-pool-testing", false);
@@ -91,6 +93,7 @@
 +    private static void applySystemProperties() {
 +        setBooleanProperty("pewpew.asyncPathfinding", asyncPathfinding);
 +        setBooleanProperty("pewpew.asyncSensors", asyncSensors);
++        setBooleanProperty("pewpew.spawnSnapshotCache", spawnSnapshotCache);
 +        setBooleanProperty("pewpew.worldTickCoordinator", worldTickCoordinator);
 +        setBooleanProperty("pewpew.worldTickCoordinator.testing", worldTickCoordinatorTesting);
 +        setBooleanProperty("pewpew.async.testing", asyncPoolTesting);
@@ -113,6 +116,7 @@
 +        LOGGER.info("Pewpew feature flags:");
 +        logFlag("async-pathfinding", asyncPathfinding);
 +        logFlag("async-sensors", asyncSensors);
++        logFlag("spawn-snapshot-cache", spawnSnapshotCache);
 +        logFlag("world-tick-coordinator", worldTickCoordinator);
 +        logFlag("world-tick-coordinator-testing", worldTickCoordinatorTesting);
 +        logFlag("async-pool-testing", asyncPoolTesting);
