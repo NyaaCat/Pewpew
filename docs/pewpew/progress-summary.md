@@ -141,14 +141,20 @@
   - async on avgMspt 59.90 (-11.2%), avgTps 16.06 (+10.9%)
   - async off avgMspt 67.28 (-0.2%), avgTps 14.56 (+0.6%)
   - reports saved as `docs/pewpew/findings/multiverse-bench-report-pewpew-async-on.md` + `docs/pewpew/findings/multiverse-bench-report-pewpew-async-off.md` and summaries as `docs/pewpew/findings/multiverse-bench-summary-pewpew-async-on.json` + `docs/pewpew/findings/multiverse-bench-summary-pewpew-async-off.json`
+- Multiworld A/B with monster sync fallback disabled:
+  - async on (fallback false) avgMspt 59.21 (-12.2%), avgTps 16.18 (+11.7%) vs baseline
+  - delta vs fallback true: avgMspt -1.14%, avgTps +0.73%
+  - reports saved as `docs/pewpew/findings/multiverse-bench-report-pewpew-async-on-no-monster-fallback.md` and summary `docs/pewpew/findings/multiverse-bench-summary-pewpew-async-on-no-monster-fallback.json`
 - Built a Mojmap paperclip server jar for testing at `pewpew-server/build/libs/pewpew-paperclip-1.21.8-R0.1-SNAPSHOT-mojmap.jar`.
 - Switched build metadata to Paper coordinates (group `io.papermc.paper`, api artifact name `paper-api`) to restore valid Bukkit version strings for plugins like Essentials.
 - Reviewed `tmp/profiler-v23.txt` and `tmp/profiler-v24.txt`: entity tick dominates; v23 shows zombie melee pathfinding on main thread; v24 shows villager Brain/behavior tick + spawn checks + fluid ticks dominating. Suspect async pathing in reachability-only behaviors (AcquirePoi/bed/home) can leave villagers idle; plan to gate async pathing to navigation-driven calls or add async callbacks to set memory targets.
 - Added async POI path callbacks and pending-aware handling for villager bed/home/jobsite logic (AcquirePoi, NearestBedSensor, SetClosestHomeAsWalkTarget), plus sync pathing in VillagerMakeLove to avoid async reachability. Added monster sync-fallback toggle in config and PathNavigation.
+- Reviewed natural spawn pipeline (`ServerChunkCache.tickChunks` → `NaturalSpawner.spawnForChunk`) and identified snapshot candidates: spawn position validation (`SpawnPlacements.isSpawnPositionOk`/`checkSpawnRules`), `getTopNonCollidingPos` block-state scans, and biome/spawn-list lookups per chunk; potential improvement is a per-tick chunk snapshot (block/fluids + heightmap/biome) to share across spawn attempts and enable async candidate selection.
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
-2) Validate villager AI behavior under live gameplay and consider A/B tests for monster sync fallback false.
-3) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
-4) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
-5) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
+2) Validate villager AI behavior under live gameplay and decide whether to default monster sync fallback to false.
+3) Prototype a spawn snapshot cache for NaturalSpawner and quantify impact on spawn tick time.
+4) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
+5) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
+6) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
