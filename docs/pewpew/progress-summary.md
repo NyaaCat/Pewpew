@@ -131,6 +131,11 @@
   - async sensors on: avgMspt 68.09 (+0.2%), avgTps 14.36 (-0.4%)
   - async pathing+sensors on: avgMspt 64.33 (-5.3%), avgTps 15.15 (+5.1%)
   - reports saved as `docs/pewpew/findings/multiverse-bench-report-pewpew-async-*.md` and summaries as `docs/pewpew/findings/multiverse-bench-summary-pewpew-async-*.json`
+- Multiworld A/B v2 after async sensor scheduling + shared snapshot cache (control async off avgMspt 68.84, avgTps 14.15):
+  - async pathing on: avgMspt 63.96 (-7.1%), avgTps 15.25 (+7.8%)
+  - async sensors on: avgMspt 68.41 (-0.6%), avgTps 14.32 (+1.2%)
+  - async pathing+sensors on: avgMspt 63.97 (-7.1%), avgTps 15.28 (+8.0%)
+  - reports saved as `docs/pewpew/findings/multiverse-bench-report-pewpew-async-*-v2.md` and summaries as `docs/pewpew/findings/multiverse-bench-summary-pewpew-async-*-v2.json`
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
