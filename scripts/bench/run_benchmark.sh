@@ -42,6 +42,7 @@ PEWPEW_ASYNC_POOL_WORKERS="${BENCH_PEWPEW_ASYNC_POOL_WORKERS:--1}"
 PEWPEW_ASYNC_POOL_QUEUE_LIMIT="${BENCH_PEWPEW_ASYNC_POOL_QUEUE_LIMIT:--1}"
 PEWPEW_WORLD_TICK_WORKERS="${BENCH_PEWPEW_WORLD_TICK_WORKERS:--1}"
 PEWPEW_WORLD_TICK_STALL_NANOS="${BENCH_PEWPEW_WORLD_TICK_STALL_NANOS:-50000000}"
+PEWPEW_WORLD_TICK_DEDICATED_WORLDS="${BENCH_PEWPEW_WORLD_TICK_DEDICATED_WORLDS:-}"
 SERVER_PID=""
 
 TOTAL_TICKS=$((WARMUP_TICKS + SAMPLE_TICKS))
@@ -122,6 +123,10 @@ EOF
 
 function write_pewpew_config() {
     local out_dir="$1"
+    local dedicated_worlds="[]"
+    if [ -n "$PEWPEW_WORLD_TICK_DEDICATED_WORLDS" ]; then
+        dedicated_worlds="[$PEWPEW_WORLD_TICK_DEDICATED_WORLDS]"
+    fi
     cat > "$out_dir/pewpew.yml" <<EOF
 config-version: 1
 features:
@@ -136,6 +141,7 @@ settings:
   async-pool-queue-limit: $PEWPEW_ASYNC_POOL_QUEUE_LIMIT
   world-tick-coordinator-workers: $PEWPEW_WORLD_TICK_WORKERS
   world-tick-coordinator-stall-threshold-nanos: $PEWPEW_WORLD_TICK_STALL_NANOS
+  world-tick-coordinator-dedicated-worlds: $dedicated_worlds
 EOF
 }
 

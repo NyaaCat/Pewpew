@@ -105,6 +105,7 @@
 - Updated `scripts/bench/run_multiverse_benchmark.sh` to auto-pick `world-tick-coordinator-workers` when enabled and unset, using min(nproc, world count) with a floor of 2 when >1 CPU.
 - Reworked world-tick coordinator dispatch to pin each world to a stable worker thread with dynamic worker scaling and dedicated-world preferences; added `settings.world-tick-coordinator-dedicated-worlds` to `pewpew.yml` and a stability test.
 - Bench harness now writes `world-tick-coordinator-dedicated-worlds` in `pewpew.yml` (configurable via `BENCH_PEWPEW_WORLD_TICK_DEDICATED_WORLDS`).
+- Single-world bench harness now writes `world-tick-coordinator-dedicated-worlds` in `pewpew.yml`.
 
 ## Build / test status
 - `./gradlew build` succeeds (warnings about deprecated APIs only).
