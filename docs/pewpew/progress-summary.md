@@ -121,6 +121,12 @@
   - `docs/pewpew/findings/multiverse-bench-report-baseline.md`
   - `docs/pewpew/findings/multiverse-bench-summary.json`
   - `docs/pewpew/findings/multiverse-bench-report.md`
+- Multiworld A/B refresh (baseline reused) with async off as control (avgMspt 67.96, avgTps 14.42):
+  - world tick coordinator on: avgMspt 34.35 (-49.5%), avgTps 19.04 (+32.1%)
+  - async pathing on: avgMspt 62.53 (-8.0%), avgTps 15.57 (+8.0%)
+  - async sensors on: avgMspt 68.09 (+0.2%), avgTps 14.36 (-0.4%)
+  - async pathing+sensors on: avgMspt 64.33 (-5.3%), avgTps 15.15 (+5.1%)
+  - reports saved as `docs/pewpew/findings/multiverse-bench-report-pewpew-async-*.md` and summaries as `docs/pewpew/findings/multiverse-bench-summary-pewpew-async-*.json`
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
