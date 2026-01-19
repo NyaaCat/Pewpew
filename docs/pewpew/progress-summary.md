@@ -174,6 +174,11 @@
   - Observed drops in spawn path hot functions vs the earlier v6 profiles (e.g., `Level.getBlockStateIfLoadedAndInBounds` ~10-11% -> ~3%, `PalettedContainer.get` ~7-8% -> ~2%).
 - Updated root `README.md` patch workflow with the stable tmp-based patch generation process.
 - Exported step 1 changes into a new Minecraft patch (`pewpew-server/minecraft-patches/features/0018-Use-spawn-snapshots-for-block-state-reads.patch`), re-applied patches, and rebuilt the mojmap paperclip jar to confirm it is included.
+- Implemented step 2 (spawn biome quart cache) and exported it as `pewpew-server/minecraft-patches/features/0019-Cache-spawn-biomes-by-quart-position.patch`.
+- Re-profiled step 2 with 16 bots (tree output) at:
+  - `tmp/bench/prod-profile-20260119-190500-benchworld16-step2/off/profile-off-tree.html`
+  - `tmp/bench/prod-profile-20260119-190500-benchworld16-step2/on/profile-on-tree.html`
+  - Observed `SpawnSnapshotLevelReader.getBiome` drop from ~0.67% to ~0.47% in the on profile.
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
@@ -184,4 +189,4 @@
 6) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
 7) Stabilize 64-bot production profiling by reducing chunk/network load (e.g., lower view/simulation distance, slower joins, or split bot processes), then re-run off/on profiles.
 8) Draft and execute a surgical optimization plan from the production profiles, focused on low-level block-state/biome/player-distance hot paths in natural spawning and block-entity ticking.
-9) Continue step 2 (spawn biome lookup cache) and re-profile to confirm reduced `SpawnSnapshotLevelReader.getBiome`/`BiomeManager.getBiome` cost.
+9) Move to step 3 (precompute nearest player distance for spawn) and re-profile to confirm `EntityGetter.getNearestPlayer` drops inside spawn loops.
