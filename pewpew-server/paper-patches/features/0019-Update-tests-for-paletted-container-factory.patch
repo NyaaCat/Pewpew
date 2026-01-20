@@ -1,15 +1,11 @@
-From 8773c4583890dd31cd5854e4493b2b18acb8c83b Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Tue, 20 Jan 2026 03:07:49 +0000
 Subject: [PATCH] Update tests for paletted container factory
 
----
- .../pewpew/LevelChunkSectionVersionTest.java  | 35 +++----------------
- .../SnapshotPathNavigationRegionTest.java     | 34 +++---------------
- 2 files changed, 9 insertions(+), 60 deletions(-)
 
 diff --git a/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java b/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
-index 88fe71598..4c80424f5 100644
+index 88fe71598a141f666cee6a0f4c8cad4758638284..4c80424f5de8b8dfb072aaa4cd34312a72fbab3d 100644
 --- a/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
 +++ b/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
 @@ -3,23 +3,17 @@ package io.papermc.paper.pewpew;
@@ -67,7 +63,7 @@ index 88fe71598..4c80424f5 100644
 \ No newline at end of file
 +}
 diff --git a/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java b/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
-index ad6801402..97f98a3fb 100644
+index ad6801402de99daaa335ca31255b033e53dc1bbc..97f98a3fba3a6b1d8fe63dc781e17b3f02826775 100644
 --- a/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
 +++ b/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
 @@ -6,23 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -138,6 +134,3 @@ index ad6801402..97f98a3fb 100644
 -}
 \ No newline at end of file
 +}
--- 
-2.47.3
-

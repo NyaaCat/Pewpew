@@ -1,20 +1,11 @@
-From 7885ea23ef2cda6bde258a2e198625be90cb5ed6 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Tue, 20 Jan 2026 02:52:19 +0000
 Subject: [PATCH] Fix async pathing compat for 1.21.11
 
----
- .../world/entity/ai/behavior/AcquirePoi.java  |   2 +-
- .../behavior/SetClosestHomeAsWalkTarget.java  |   2 +-
- .../entity/ai/navigation/PathNavigation.java  |  11 +-
- net/minecraft/world/level/NaturalSpawner.java |   6 +
- .../world/level/pathfinder/AsyncPath.java     | 185 ++----------------
- .../level/pathfinder/AsyncPathService.java    |  15 +-
- .../SnapshotPathNavigationRegion.java         |   3 +-
- 7 files changed, 38 insertions(+), 186 deletions(-)
 
 diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-index a42c5e6..fdc63a5 100644
+index a42c5e6617a5aa8f346655c5d8a4dcbddca9fb94..fdc63a5875ab87b05b35decfef28359ae86f7a89 100644
 --- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 @@ -130,7 +130,7 @@ public class AcquirePoi {
@@ -27,7 +18,7 @@ index a42c5e6..fdc63a5 100644
                                          } else {
                                              long now = level.getGameTime();
 diff --git a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
-index 4069d73..ce74b70 100644
+index 4069d7311f0106515ad4b67ceedcc5d55cc01eb4..ce74b70bbd6ba3b0d993d7d0ceb7171228cd7521 100644
 --- a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
 +++ b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
 @@ -89,7 +89,7 @@ public class SetClosestHomeAsWalkTarget {
@@ -40,7 +31,7 @@ index 4069d73..ce74b70 100644
                                              } else if (mutableInt.getValue() < 5) {
                                                  map.long2LongEntrySet().removeIf(entry -> entry.getLongValue() < mutableLong.getValue());
 diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
-index 785febb..2470cc3 100644
+index 785febb46109b3057e6ad690897219ca29d71a03..2470cc3f9d226933ad612eca16161c0b3e57126c 100644
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 @@ -192,11 +192,11 @@ public abstract class PathNavigation {
@@ -81,7 +72,7 @@ index 785febb..2470cc3 100644
          this.reachRange = accuracy;
          this.resetStuckTimeout();
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 4b357c5..0581d65 100644
+index 4b357c58f4966d3cd5327b273b30445cbfc8f1d8..0581d6564f88b1ed9da58b28793277697fdfffb4 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
 @@ -31,6 +31,7 @@ import net.minecraft.util.VisibleForDebug;
@@ -105,7 +96,7 @@ index 4b357c5..0581d65 100644
          public boolean isClientSide() {
              return this.level.isClientSide();
 diff --git a/net/minecraft/world/level/pathfinder/AsyncPath.java b/net/minecraft/world/level/pathfinder/AsyncPath.java
-index fd30f65..76beb0c 100644
+index fd30f658034d91f0623988bbafd1bceaee60160a..76beb0c901a5947939e8f3887c9333a321c89434 100644
 --- a/net/minecraft/world/level/pathfinder/AsyncPath.java
 +++ b/net/minecraft/world/level/pathfinder/AsyncPath.java
 @@ -1,26 +1,31 @@
@@ -325,7 +316,7 @@ index fd30f65..76beb0c 100644
 \ No newline at end of file
 +}
 diff --git a/net/minecraft/world/level/pathfinder/AsyncPathService.java b/net/minecraft/world/level/pathfinder/AsyncPathService.java
-index 59f07a4..549850e 100644
+index 59f07a462120fb6c3f1ee9c556afcfadb634c91d..549850e039ce0ab8b20006db58be58e1a038a58b 100644
 --- a/net/minecraft/world/level/pathfinder/AsyncPathService.java
 +++ b/net/minecraft/world/level/pathfinder/AsyncPathService.java
 @@ -118,7 +118,7 @@ public final class AsyncPathService {
@@ -389,7 +380,7 @@ index 59f07a4..549850e 100644
 \ No newline at end of file
 +}
 diff --git a/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java b/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
-index 1107234..bc6e844 100644
+index 1107234b841ad52d94d016afe63396f5b6a96afc..bc6e8446c7383c34d2089262f80db84ed8e6cfe7 100644
 --- a/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
 +++ b/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
 @@ -118,8 +118,7 @@ public final class SnapshotPathNavigationRegion implements CollisionGetter {
@@ -402,6 +393,3 @@ index 1107234..bc6e844 100644
          return new SnapshotPathNavigationRegion(
              minChunkX,
              minChunkZ,
--- 
-2.47.3
-

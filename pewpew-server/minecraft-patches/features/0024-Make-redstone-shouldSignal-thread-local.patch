@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 05:18:28 +0000
+Subject: [PATCH] Make redstone shouldSignal thread-local
+
+
+diff --git a/io/papermc/paper/redstone/RedstoneWireTurbo.java b/io/papermc/paper/redstone/RedstoneWireTurbo.java
+index ff747a1ecdf3c888bca0d69de4f85dcd810b6139..86a6d532a03070db0682d1749de1b3715e73e026 100644
+--- a/io/papermc/paper/redstone/RedstoneWireTurbo.java
++++ b/io/papermc/paper/redstone/RedstoneWireTurbo.java
+@@ -829,14 +829,14 @@ public final class RedstoneWireTurbo {
+         j = getMaxCurrentStrength(upd, j);
+         int l = 0;
+ 
+-        wire.shouldSignal = false;
++        wire.setShouldSignal(false); // Pewpew - thread-local guard for parallel ticking
+         // Unfortunately, World.isBlockIndirectlyGettingPowered is complicated,
+         // and I'm not ready to try to replicate even more functionality from
+         // elsewhere in Minecraft into this accelerator.  So sadly, we must
+         // suffer the performance hit of this very expensive call.  If there
+         // is consistency to what this call returns, we may be able to cache it.
+         final int k = worldIn.getBestNeighborSignal(upd.self);
+-        wire.shouldSignal = true;
++        wire.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
+ 
+         // The variable 'k' holds the maximum redstone power value of any adjacent blocks.
+         // If 'k' has the highest level of all neighbors, then the power level of this
+diff --git a/net/minecraft/world/level/block/RedStoneWireBlock.java b/net/minecraft/world/level/block/RedStoneWireBlock.java
+index 8e43209b6f928870416511f0b4482cf011a0edf8..f54579b6b6c24f2d0473b2c2372140a62196e280 100644
+--- a/net/minecraft/world/level/block/RedStoneWireBlock.java
++++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
+@@ -64,7 +64,17 @@ public class RedStoneWireBlock extends Block {
+     private final Function<BlockState, VoxelShape> shapes;
+     private final BlockState crossState;
+     private final RedstoneWireEvaluator evaluator = new DefaultRedstoneWireEvaluator(this);
+-    public boolean shouldSignal = true;
++    // Pewpew start - thread-local redstone signal for parallel ticking
++    private final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> Boolean.TRUE);
++
++    public void setShouldSignal(boolean shouldSignal) {
++        this.shouldSignal.set(shouldSignal ? Boolean.TRUE : Boolean.FALSE);
++    }
++
++    public boolean shouldSignal() {
++        return this.shouldSignal.get();
++    }
++    // Pewpew end - thread-local redstone signal for parallel ticking
+ 
+     @Override
+     public MapCodec<RedStoneWireBlock> codec() {
+@@ -328,9 +338,9 @@ public class RedStoneWireBlock extends Block {
+     }
+ 
+     public int getBlockSignal(Level level, BlockPos pos) {
+-        this.shouldSignal = false;
++        this.setShouldSignal(false); // Pewpew - thread-local guard for parallel ticking
+         int bestNeighborSignal = level.getBestNeighborSignal(pos);
+-        this.shouldSignal = true;
++        this.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
+         return bestNeighborSignal;
+     }
+ 
+@@ -422,12 +432,12 @@ public class RedStoneWireBlock extends Block {
+ 
+     @Override
+     protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+-        return !this.shouldSignal ? 0 : state.getSignal(level, pos, side);
++        return !this.shouldSignal() ? 0 : state.getSignal(level, pos, side);
+     }
+ 
+     @Override
+     protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
+-        if (this.shouldSignal && side != Direction.DOWN) {
++        if (this.shouldSignal() && side != Direction.DOWN) {
+             int powerValue = state.getValue(POWER);
+             if (powerValue == 0) {
+                 return 0;
+@@ -459,7 +469,7 @@ public class RedStoneWireBlock extends Block {
+ 
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+-        return this.shouldSignal;
++        return this.shouldSignal();
+     }
+ 
+     public static int getColorForPower(int power) {

@@ -1,14 +1,11 @@
-From d1e4f075114cc09ce6ea5e9e3d147e3320bebc0b Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Tue, 20 Jan 2026 02:52:54 +0000
 Subject: [PATCH] Fix mspt output for per-world tick arrays
 
----
- .../io/papermc/paper/command/MSPTCommand.java | 24 +++++++++++++++++++
- 1 file changed, 24 insertions(+)
 
 diff --git a/src/main/java/io/papermc/paper/command/MSPTCommand.java b/src/main/java/io/papermc/paper/command/MSPTCommand.java
-index 9733ff4fe..3009a1cdc 100644
+index 9733ff4fef2c586abb8e41a9fef3a6fb9154ed23..3009a1cdc951a5b9d8caa6af8bd70436c1a8dad2 100644
 --- a/src/main/java/io/papermc/paper/command/MSPTCommand.java
 +++ b/src/main/java/io/papermc/paper/command/MSPTCommand.java
 @@ -111,6 +111,30 @@ public final class MSPTCommand extends Command {
@@ -42,6 +39,3 @@ index 9733ff4fe..3009a1cdc 100644
      private static Component getColor(double avg) {
          return text(ONE_DECIMAL_PLACES.get().format(avg), avg >= 50 ? RED : avg >= 40 ? YELLOW : GREEN);
      }
--- 
-2.47.3
-
