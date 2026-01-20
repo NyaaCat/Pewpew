@@ -1,0 +1,19 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:26:14 +0000
+Subject: [PATCH] Use ResourceLocation factory in test
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+index 4420ed6d076e152051c2a22d2fa498c7e53c6401..6c7d5c240e0ab7f102aab8d803aca8087613328c 100644
+--- a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+@@ -35,7 +35,7 @@ class RedstoneWireThreadLocalTest {
+     void shouldSignalIsThreadLocal() throws InterruptedException {
+         RedStoneWireBlock wire = new RedStoneWireBlock(
+             BlockBehaviour.Properties.of()
+-                .setId(ResourceKey.create(Registries.BLOCK, new ResourceLocation("pewpew", "redstone_wire_test")))
++                .setId(ResourceKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("pewpew", "redstone_wire_test")))
+         );
+         wire.setShouldSignal(false);
+         AtomicReference<Boolean> initial = new AtomicReference<>();
