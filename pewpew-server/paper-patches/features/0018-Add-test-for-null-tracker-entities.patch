@@ -1,0 +1,36 @@
+From 4e79554ebb580e958c5c50b1b249f86d1f554905 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Tue, 20 Jan 2026 03:18:19 +0000
+Subject: [PATCH] Add test for null tracker entities
+
+---
+ .../level/ChunkMapTrackerEntitiesTest.java      | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+ create mode 100644 src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java
+
+diff --git a/src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java b/src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java
+new file mode 100644
+index 000000000..74e2b7508
+--- /dev/null
++++ b/src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java
+@@ -0,0 +1,17 @@
++package net.minecraft.server.level;
++
++import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
++import static org.mockito.Mockito.mock;
++
++import net.minecraft.world.entity.Entity;
++import org.junit.jupiter.api.Test;
++
++class ChunkMapTrackerEntitiesTest {
++    @Test
++    void tickTrackerEntitiesSkipsNullEntries() {
++        Entity entity = mock(Entity.class);
++        Entity[] entities = new Entity[] { null, entity };
++
++        assertDoesNotThrow(() -> ChunkMap.tickTrackerEntities(entities, entities.length));
++    }
++}
+-- 
+2.47.3
+
