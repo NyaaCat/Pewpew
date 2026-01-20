@@ -64,13 +64,13 @@ This file consolidates development requirements, best practices, and key notes.
 ## Patch workflow (strict)
 - Do not edit `pewpew-server/paper-patches` directly.
 - Do not edit `pewpew-server/minecraft-patches` directly.
-- Work in `tmp/` with a fresh, patched Paper source:
-  - Clone upstream Paper at the target version and run `./gradlew applyPatches` there.
-  - Apply Pewpew changes on top of the patched sources, then commit locally.
-  - Generate patches via `git format-patch` (or equivalent) from the tmp repo.
-  - Copy the resulting patch files into `pewpew-server/paper-patches` or `pewpew-server/minecraft-patches` as appropriate.
+- Keep `paperRef` pinned per version branch in `gradle.properties` to a specific Paper `main` commit.
+- Work in this repo using paperweight:
+  - Run `./gradlew applyAllPatches` (or `applyPaperApiPatches` + `:pewpew-server:applyAllServerPatches`) to regenerate `paper-api/` and `paper-server/`.
+  - Apply changes on top of the patched sources (`paper-server` or `paper-api`), then commit locally in those repos.
+  - Regenerate patch files via paperweight tasks (fixup or rebuild), not by editing patches directly.
 - When building, apply Pewpew patches after all Paper patches (`./gradlew :pewpew-server:applyAllServerPatches`).
-- Rebuild the full patch series only when intentionally refreshing everything (`./gradlew rebuildAllServerPatches`).
+- Rebuild the full patch series only when intentionally refreshing everything (`./gradlew :pewpew-server:rebuildAllServerPatches`).
 - Keep patches minimal and derived only from the patched working trees.
 
 ## Implementation best practices
