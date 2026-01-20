@@ -5,7 +5,7 @@ Subject: [PATCH] Make CraftBukkit thread locals
 
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
-index 5d4faad9df4824cfd61abfd4df011c006f114424..8c42e0157708e35b2963f743a9500f3d2da6f2f2 100644
+index 26feb76c52631e77b8529e4da1e54e1c703ea001..c21a23efa33ffda91dfed044c643740fd7b52d44 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockEntityState.java
 @@ -32,7 +32,7 @@ public abstract class CraftBlockEntityState<T extends BlockEntity> extends Craft
@@ -30,10 +30,10 @@ index 5d4faad9df4824cfd61abfd4df011c006f114424..8c42e0157708e35b2963f743a9500f3d
          } else {
              this.snapshot = this.createSnapshot(blockEntity);
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java
-index 3c9131ac3cfb4f758e76830ca48813feb321e4c6..9639e32e4dca412132e29d6cac82948b56bed852 100644
+index bcd73c788768f9a278181926fb56df510d271a76..0b3101896c1e8acb32aa1ce9208a6660a3744018 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java
-@@ -195,14 +195,14 @@ public final class CraftBlockStates {
+@@ -196,14 +196,14 @@ public final class CraftBlockStates {
          BlockPos pos = craftBlock.getPosition();
          net.minecraft.world.level.block.state.BlockState state = craftBlock.getNMS();
          BlockEntity blockEntity = craftBlock.getHandle().getBlockEntity(pos);
@@ -52,19 +52,19 @@ index 3c9131ac3cfb4f758e76830ca48813feb321e4c6..9639e32e4dca412132e29d6cac82948b
      }
  
 diff --git a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-index 9878d6842ec77b9a01c08046459f7d320e4c47fb..78b995fbc44514cdb2f81af85b51a9f7dbd18e12 100644
+index cd83ca2ace1dab6c1f10e2306a0ca0bb8ae083cc..2c54646480ea69bdd7eea8237af833b7504ed8fd 100644
 --- a/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
 +++ b/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java
-@@ -819,7 +819,7 @@ public class CraftEventFactory {
+@@ -937,7 +937,7 @@ public class CraftEventFactory {
          return false;
      }
  
 -    public static BlockPos sourceBlockOverride = null; // SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPos up to five methods deep.
 +    public static final ThreadLocal<BlockPos> sourceBlockOverrideRT = new ThreadLocal<>(); // SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPos up to five methods deep.
  
-     public static boolean handleBlockSpreadEvent(LevelAccessor world, BlockPos source, BlockPos target, net.minecraft.world.level.block.state.BlockState state, int flags) {
+     public static boolean handleBlockSpreadEvent(LevelAccessor world, BlockPos source, BlockPos target, net.minecraft.world.level.block.state.BlockState state, @net.minecraft.world.level.block.Block.UpdateFlags int flags) {
          return handleBlockSpreadEvent(world, source, target, state, flags, false);
-@@ -835,7 +835,8 @@ public class CraftEventFactory {
+@@ -953,7 +953,8 @@ public class CraftEventFactory {
          CraftBlockState snapshot = CraftBlockStates.getBlockState(world, target);
          snapshot.setData(state);
  

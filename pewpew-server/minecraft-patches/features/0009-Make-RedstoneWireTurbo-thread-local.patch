@@ -5,10 +5,10 @@ Subject: [PATCH] Make RedstoneWireTurbo thread-local
 
 
 diff --git a/net/minecraft/world/level/block/RedStoneWireBlock.java b/net/minecraft/world/level/block/RedStoneWireBlock.java
-index 1943a6aad888647953e2d9dbbeedb0bd81c6f9df..c55b0017d1fd6cd11bc1bc057608cf1802fcd208 100644
+index 6d98bc37d88459d1e0a171b52bbff5810d775c38..8e43209b6f928870416511f0b4482cf011a0edf8 100644
 --- a/net/minecraft/world/level/block/RedStoneWireBlock.java
 +++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
-@@ -267,7 +267,8 @@ public class RedStoneWireBlock extends Block {
+@@ -266,7 +266,8 @@ public class RedStoneWireBlock extends Block {
  
      // Paper start - Optimize redstone (Eigencraft)
      // The bulk of the new functionality is found in RedstoneWireTurbo.java
@@ -18,7 +18,7 @@ index 1943a6aad888647953e2d9dbbeedb0bd81c6f9df..c55b0017d1fd6cd11bc1bc057608cf18
  
      /*
       * Modified version of pre-existing updateSurroundingRedstone, which is called from
-@@ -283,7 +284,7 @@ public class RedStoneWireBlock extends Block {
+@@ -282,7 +283,7 @@ public class RedStoneWireBlock extends Block {
              if (orientation != null) {
                  source = pos.relative(orientation.getFront().getOpposite());
              }
@@ -27,7 +27,7 @@ index 1943a6aad888647953e2d9dbbeedb0bd81c6f9df..c55b0017d1fd6cd11bc1bc057608cf18
              return;
          }
          updatePowerStrength(worldIn, pos, state, orientation, blockAdded);
-@@ -311,7 +312,7 @@ public class RedStoneWireBlock extends Block {
+@@ -310,7 +311,7 @@ public class RedStoneWireBlock extends Block {
                  // [Space Walker] suppress shape updates and emit those manually to
                  // bypass the new neighbor update stack.
                  if (level.setBlock(pos, state, Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_CLIENTS)) {

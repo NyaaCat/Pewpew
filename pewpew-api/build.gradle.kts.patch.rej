@@ -1,8 +1,8 @@
 ++++ REJECTED HUNK: 1
-@@ -91,7 +91,7 @@
-     mockitoAgent("org.mockito:mockito-core:5.14.1") { isTransitive = false } // configure mockito agent that is needed in newer java versions
+@@ -90,7 +90,7 @@
      testRuntimeOnly("org.junit.platform:junit-platform-launcher")
  }
+ 
 -val generatedDir: java.nio.file.Path = layout.projectDirectory.dir("src/generated/java").asFile.toPath()
 +val generatedDir: java.nio.file.Path = rootProject.layout.projectDirectory.dir("paper-api/src/generated/java").asFile.toPath()
  idea {
@@ -12,7 +12,6 @@
 
 ++++ REJECTED HUNK: 2
 @@ -100,6 +100,18 @@
- sourceSets {
      main {
          java {
              srcDir(generatedDir)
@@ -34,7 +33,8 @@
 ++++ END HUNK
 
 ++++ REJECTED HUNK: 3
-@@ -167,7 +179,7 @@
+@@ -166,7 +178,7 @@
+ 
  tasks.withType<Javadoc>().configureEach {
      val options = options as StandardJavadocDocletOptions
 -    options.overview = "src/main/javadoc/overview.html"
@@ -45,8 +45,9 @@
 ++++ END HUNK
 
 ++++ REJECTED HUNK: 4
-@@ -200,11 +212,11 @@
+@@ -199,11 +211,11 @@
      }
+ 
      // workaround for https://github.com/gradle/gradle/issues/4046
 -    inputs.dir("src/main/javadoc").withPropertyName("javadoc-sourceset")
 +    inputs.dir("../paper-api/src/main/javadoc").withPropertyName("javadoc-sourceset")

@@ -1,17 +1,14 @@
-From b7d0ce5de16952d57a4124abfc31a943bf5ec0e8 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Mon, 19 Jan 2026 18:34:25 +0000
 Subject: [PATCH] Cache spawn biomes by quart position
 
----
- net/minecraft/world/level/NaturalSpawner.java | 11 +++++++----
- 1 file changed, 7 insertions(+), 4 deletions(-)
 
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 6078180..61014e0 100644
+index 59010f2e0ddf4d7cae2606cba6b7dd7c5353d49c..aefd696667351fe9d09857e742120193e302b048 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -721,15 +721,18 @@ public final class NaturalSpawner {
+@@ -726,15 +726,18 @@ public final class NaturalSpawner {
              if (!this.contains(pos)) {
                  return this.level.getBiome(pos);
              }
@@ -34,6 +31,3 @@ index 6078180..61014e0 100644
              );
              this.biomeCache.put(key, biome);
              return biome;
--- 
-2.47.3
-

@@ -5,10 +5,10 @@ Subject: [PATCH] Handle async path pending results
 
 
 diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-index 57befff1f0675e889304a6258258384d8de02c87..b23f11dd111a2f7546e0c081bfaa422de756d12b 100644
+index 278addb7dbe4f57e99fb91ce1cd1bf3559e239a3..a42c5e6617a5aa8f346655c5d8a4dcbddca9fb94 100644
 --- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
 +++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-@@ -22,6 +22,8 @@ import net.minecraft.world.entity.ai.behavior.declarative.BehaviorBuilder;
+@@ -20,6 +20,8 @@ import net.minecraft.world.entity.ai.behavior.declarative.BehaviorBuilder;
  import net.minecraft.world.entity.ai.memory.MemoryModuleType;
  import net.minecraft.world.entity.ai.village.poi.PoiManager;
  import net.minecraft.world.entity.ai.village.poi.PoiType;
@@ -16,8 +16,8 @@ index 57befff1f0675e889304a6258258384d8de02c87..b23f11dd111a2f7546e0c081bfaa422d
 +import net.minecraft.world.level.pathfinder.AsyncPathService;
  import net.minecraft.world.level.pathfinder.Path;
  import org.apache.commons.lang3.mutable.MutableLong;
- 
-@@ -94,7 +96,58 @@ public class AcquirePoi {
+ import org.jspecify.annotations.Nullable;
+@@ -93,7 +95,58 @@ public class AcquirePoi {
                                  }
                              }
                              // Paper end - optimise POI access
@@ -77,10 +77,10 @@ index 57befff1f0675e889304a6258258384d8de02c87..b23f11dd111a2f7546e0c081bfaa422d
                                  BlockPos target = path.getTarget();
                                  poiManager.getType(target).ifPresent(holder -> {
 diff --git a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
-index 977afa268838304abdb34be253ca36ac1c22e99f..79cdfc8a82c27e45ba26fe84dd662be64c056226 100644
+index e6b9bcf3bf4e476be58830156a194557b76ae3f4..5df4d136a349f4b37a181d3d8185540acc1ea52a 100644
 --- a/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
 +++ b/net/minecraft/world/entity/ai/behavior/LongJumpToRandomPos.java
-@@ -163,7 +163,15 @@ public class LongJumpToRandomPos<E extends Mob> extends Behavior<E> {
+@@ -162,7 +162,15 @@ public class LongJumpToRandomPos<E extends Mob> extends Behavior<E> {
                          entity.getBrain().setMemory(MemoryModuleType.LOOK_TARGET, new BlockPosTracker(blockPos));
                          PathNavigation navigation = entity.getNavigation();
                          Path path = navigation.createPath(blockPos, 0, 8);
@@ -98,10 +98,10 @@ index 977afa268838304abdb34be253ca36ac1c22e99f..79cdfc8a82c27e45ba26fe84dd662be6
                              this.prepareJumpStart = prepareJumpStart;
                              return;
 diff --git a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
-index 621ba76784f2b92790eca62be4d0688834335ab6..c893414822f4059f35d06fc91beef780e8d77b40 100644
+index a0df7e116872858efa02c9c80e9812dcd97ffbf2..efd9e4162c5e3ee31b200c4bc23ac62cc9f32782 100644
 --- a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
 +++ b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
-@@ -125,7 +125,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
+@@ -123,7 +123,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
          if (this.reachedTarget(mob, target)) {
              brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
          } else {
@@ -111,10 +111,10 @@ index 621ba76784f2b92790eca62be4d0688834335ab6..c893414822f4059f35d06fc91beef780
                  brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
              } else if (!brain.hasMemoryValue(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE)) {
 diff --git a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
-index dfd39ff8f4a17b42bda60f2bcec5ebc163c25954..8cab0e42d672defcce817b220db1a7ed06303d59 100644
+index a0091d419ed5eed9b7ead5ca174fc218001e70a0..a21d3b3a9bfdca2e934f04725c894415b6873ce9 100644
 --- a/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
 +++ b/net/minecraft/world/entity/ai/behavior/PrepareRamNearestTarget.java
-@@ -163,7 +163,13 @@ public class PrepareRamNearestTarget<E extends PathfinderMob> extends Behavior<E
+@@ -164,7 +164,13 @@ public class PrepareRamNearestTarget<E extends PathfinderMob> extends Behavior<E
              PathNavigation navigation = pathfinder.getNavigation();
              return list.stream().sorted(Comparator.comparingDouble(pathfinder.blockPosition()::distSqr)).filter(pos -> {
                  Path path = navigation.createPath(pos, 0);
@@ -130,10 +130,10 @@ index dfd39ff8f4a17b42bda60f2bcec5ebc163c25954..8cab0e42d672defcce817b220db1a7ed
          }
      }
 diff --git a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
-index 4f9f3367b1ca3903df03a80fa2b01a3d24e6e77d..57d81ec5ec9401205fe590b50322675948ac454a 100644
+index 7b6e9047f88370ca445ca2a62b57df98e1d6fbc6..4069d7311f0106515ad4b67ceedcc5d55cc01eb4 100644
 --- a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
 +++ b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
-@@ -17,6 +17,8 @@ import net.minecraft.world.entity.ai.memory.WalkTarget;
+@@ -16,6 +16,8 @@ import net.minecraft.world.entity.ai.memory.WalkTarget;
  import net.minecraft.world.entity.ai.village.poi.PoiManager;
  import net.minecraft.world.entity.ai.village.poi.PoiType;
  import net.minecraft.world.entity.ai.village.poi.PoiTypes;
@@ -142,7 +142,7 @@ index 4f9f3367b1ca3903df03a80fa2b01a3d24e6e77d..57d81ec5ec9401205fe590b503226759
  import net.minecraft.world.level.pathfinder.Path;
  import org.apache.commons.lang3.mutable.MutableInt;
  import org.apache.commons.lang3.mutable.MutableLong;
-@@ -60,7 +62,48 @@ public class SetClosestHomeAsWalkTarget {
+@@ -59,7 +61,48 @@ public class SetClosestHomeAsWalkTarget {
                                          poi -> poi.is(PoiTypes.HOME), predicate, mob.blockPosition(), 48, PoiManager.Occupancy.ANY
                                      )
                                      .collect(Collectors.toSet());
@@ -192,13 +192,13 @@ index 4f9f3367b1ca3903df03a80fa2b01a3d24e6e77d..57d81ec5ec9401205fe590b503226759
                                      BlockPos target = path.getTarget();
                                      Optional<Holder<PoiType>> type = poiManager.getType(target);
 diff --git a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
-index 2591e4bbd234e51ff2c6b00db888d3b158f5a07d..b33413c9533a2eb87bac205dc2d70364c87f4a53 100644
+index 35aec6c3aa2f09f13954fda67902b3c975f566e3..99a40bdd52f5e191b99f6f715493221fc5db82dc 100644
 --- a/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
 +++ b/net/minecraft/world/entity/ai/behavior/VillagerMakeLove.java
 @@ -15,6 +15,7 @@ import net.minecraft.world.entity.ai.memory.MemoryStatus;
  import net.minecraft.world.entity.ai.village.poi.PoiType;
  import net.minecraft.world.entity.ai.village.poi.PoiTypes;
- import net.minecraft.world.entity.npc.Villager;
+ import net.minecraft.world.entity.npc.villager.Villager;
 +import net.minecraft.world.level.PathNavigationRegion;
  import net.minecraft.world.level.pathfinder.Path;
  
@@ -227,13 +227,21 @@ index 2591e4bbd234e51ff2c6b00db888d3b158f5a07d..b33413c9533a2eb87bac205dc2d70364
      }
  
 diff --git a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
-index 44340aa26bc89faaf8842bb36048cf61dba34314..222fd859ba33db12415801554916e44f0976f65c 100644
+index 0ae25ca3d1822c9efedbde0355edf4d85db0f39b..77a0260a813a22f39b6b8c22f1750eb23cf754cf 100644
 --- a/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
 +++ b/net/minecraft/world/entity/ai/behavior/YieldJobSite.java
-@@ -80,6 +80,12 @@ public class YieldJobSite {
+@@ -12,6 +12,7 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
+ import net.minecraft.world.entity.ai.village.poi.PoiType;
+ import net.minecraft.world.entity.npc.villager.Villager;
+ import net.minecraft.world.entity.npc.villager.VillagerProfession;
++import net.minecraft.world.level.pathfinder.AsyncPath;
+ import net.minecraft.world.level.pathfinder.Path;
  
-     private static boolean canReachPos(PathfinderMob mob, BlockPos pos, PoiType poi) {
-         Path path = mob.getNavigation().createPath(pos, poi.validRange());
+ public class YieldJobSite {
+@@ -79,6 +80,12 @@ public class YieldJobSite {
+ 
+     private static boolean canReachPos(PathfinderMob mob, BlockPos pos, PoiType poiType) {
+         Path path = mob.getNavigation().createPath(pos, poiType.validRange());
 -        return path != null && path.canReach();
 +        if (path == null) {
 +            return false;
@@ -245,10 +253,10 @@ index 44340aa26bc89faaf8842bb36048cf61dba34314..222fd859ba33db12415801554916e44f
      }
  }
 diff --git a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
-index 9ef00958eae124e4a37d0e1ff4e763e04d1414f5..f8e89636e10c8b568ea069919f78b059f2ffc3ec 100644
+index 404c5304c0a5ccdcfddde981d909d508f9164ce3..f6d170c54ed882ada138553de348105948fe196f 100644
 --- a/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
 +++ b/net/minecraft/world/entity/ai/goal/target/TargetGoal.java
-@@ -118,6 +118,8 @@ public abstract class TargetGoal extends Goal {
+@@ -117,6 +117,8 @@ public abstract class TargetGoal extends Goal {
          Path path = this.mob.getNavigation().createPath(target, 0);
          if (path == null) {
              return false;
@@ -322,11 +330,11 @@ index 066faa704338c573472381e1ebd063e0d52aaaa4..1518d8532ffd8895f4ec3292313a3840
              if (path != null && path.canReach()) {
                  BlockPos target = path.getTarget();
                  Optional<Holder<PoiType>> type = poiManager.getType(target);
-diff --git a/net/minecraft/world/entity/animal/Bee.java b/net/minecraft/world/entity/animal/Bee.java
-index 13f24836649790a34b988e2d63accb043e6ff080..66d855c6c76e746639c3d1ec9d06b09686aaeee1 100644
---- a/net/minecraft/world/entity/animal/Bee.java
-+++ b/net/minecraft/world/entity/animal/Bee.java
-@@ -84,6 +84,7 @@ import net.minecraft.world.level.block.state.BlockState;
+diff --git a/net/minecraft/world/entity/animal/bee/Bee.java b/net/minecraft/world/entity/animal/bee/Bee.java
+index 0cbcf23b6edba2305dfbbc95abb06a90a6edd42b..ff24116e1933c0c36123fb6986457920d5e9bbf2 100644
+--- a/net/minecraft/world/entity/animal/bee/Bee.java
++++ b/net/minecraft/world/entity/animal/bee/Bee.java
+@@ -89,6 +89,7 @@ import net.minecraft.world.level.block.state.BlockState;
  import net.minecraft.world.level.block.state.properties.BlockStateProperties;
  import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
  import net.minecraft.world.level.material.Fluid;
@@ -334,7 +342,7 @@ index 13f24836649790a34b988e2d63accb043e6ff080..66d855c6c76e746639c3d1ec9d06b096
  import net.minecraft.world.level.pathfinder.Path;
  import net.minecraft.world.level.pathfinder.PathType;
  import net.minecraft.world.level.storage.ValueInput;
-@@ -879,7 +880,14 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
+@@ -877,7 +878,14 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
              int i = Bee.this.closerThan(pos, 3) ? 1 : 2;
              Bee.this.navigation.setMaxVisitedNodesMultiplier(10.0F);
              Bee.this.navigation.moveTo(pos.getX(), pos.getY(), pos.getZ(), i, 1.0);
@@ -350,7 +358,7 @@ index 13f24836649790a34b988e2d63accb043e6ff080..66d855c6c76e746639c3d1ec9d06b096
          }
  
          boolean isTargetBlacklisted(BlockPos pos) {
-@@ -911,7 +919,10 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
+@@ -909,7 +917,10 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
                  return true;
              } else {
                  Path path = Bee.this.navigation.getPath();
@@ -362,7 +370,7 @@ index 13f24836649790a34b988e2d63accb043e6ff080..66d855c6c76e746639c3d1ec9d06b096
              }
          }
      }
-@@ -1254,7 +1265,7 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
+@@ -1251,7 +1262,7 @@ public class Bee extends Animal implements NeutralMob, FlyingAnimal {
                      map.put(blockPos.asLong(), orDefault);
                  } else if (Bee.attractsBees(Bee.this.level().getBlockState(blockPos))) {
                      Path path = Bee.this.navigation.createPath(blockPos, 1);
@@ -372,7 +380,7 @@ index 13f24836649790a34b988e2d63accb043e6ff080..66d855c6c76e746639c3d1ec9d06b096
                      }
  
 diff --git a/net/minecraft/world/entity/animal/sniffer/Sniffer.java b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
-index 6a9f31c1f39cc14ad7b5ae3af85908bc7a4caae4..5eac6ae2591b9359f845cd3c4d7019c5f61284ec 100644
+index a4d60a0dddabd7981d2db28af6b1d88d64d6e806..4127c46929ef3a4c9ee3eb9e48664cf1019459d7 100644
 --- a/net/minecraft/world/entity/animal/sniffer/Sniffer.java
 +++ b/net/minecraft/world/entity/animal/sniffer/Sniffer.java
 @@ -267,9 +267,20 @@ public class Sniffer extends Animal {
@@ -400,10 +408,10 @@ index 6a9f31c1f39cc14ad7b5ae3af85908bc7a4caae4..5eac6ae2591b9359f845cd3c4d7019c5
  
      private void dropSeed() {
 diff --git a/net/minecraft/world/entity/raid/Raider.java b/net/minecraft/world/entity/raid/Raider.java
-index a495789b2d21fa9a24d5dca4ecfa196ddce49466..d1408ae8201abaff4d23cc9019fe63500b71cc0d 100644
+index ab94809c5cedc8ea7db6db45394bc9c65516da63..7a3c449a8b44a0ac4b187400e6bb395f8a0e2ba9 100644
 --- a/net/minecraft/world/entity/raid/Raider.java
 +++ b/net/minecraft/world/entity/raid/Raider.java
-@@ -36,6 +36,7 @@ import net.minecraft.world.entity.monster.PatrollingMonster;
+@@ -35,6 +35,7 @@ import net.minecraft.world.entity.monster.illager.AbstractIllager;
  import net.minecraft.world.item.ItemStack;
  import net.minecraft.world.level.Level;
  import net.minecraft.world.level.ServerLevelAccessor;
@@ -411,7 +419,7 @@ index a495789b2d21fa9a24d5dca4ecfa196ddce49466..d1408ae8201abaff4d23cc9019fe6350
  import net.minecraft.world.level.pathfinder.Path;
  import net.minecraft.world.level.storage.ValueInput;
  import net.minecraft.world.level.storage.ValueOutput;
-@@ -376,7 +377,7 @@ public abstract class Raider extends PatrollingMonster {
+@@ -371,7 +372,7 @@ public abstract class Raider extends PatrollingMonster {
                          map.put(itemEntity.getId(), orDefault);
                      } else {
                          Path path = this.mob.getNavigation().createPath(itemEntity, 1);

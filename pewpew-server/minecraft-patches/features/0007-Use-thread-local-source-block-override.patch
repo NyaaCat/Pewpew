@@ -5,10 +5,10 @@ Subject: [PATCH] Use thread-local source block override
 
 
 diff --git a/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java b/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
-index 0a94670dc20bb9c521b0395633eb100393895f6a..b1c14417c38a8b6b3895776623ca8c034fd40f2e 100644
+index ab7be4298be22af32c4726f178b93896b96f599d..82124fa1986a20b7f25a1e012512d1f21994f3c6 100644
 --- a/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
-@@ -43,9 +43,9 @@ public class SculkCatalystBlockEntity extends BlockEntity implements GameEventLi
+@@ -44,9 +44,9 @@ public class SculkCatalystBlockEntity extends BlockEntity implements GameEventLi
      // Paper end - Fix NPE in SculkBloomEvent world access
  
      public static void serverTick(Level level, BlockPos pos, BlockState state, SculkCatalystBlockEntity sculkCatalyst) {

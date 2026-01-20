@@ -1,18 +1,14 @@
-From c95d0be803a4451eb8bb7faea37e722c0e814ef6 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Mon, 19 Jan 2026 18:32:30 +0000
 Subject: [PATCH] Use spawn snapshots for block-state reads
 
----
- net/minecraft/world/level/NaturalSpawner.java | 25 +++++++++++++++++--
- .../world/level/chunk/PalettedContainer.java  |  1 +
- 2 files changed, 24 insertions(+), 2 deletions(-)
 
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 15b11bc..6078180 100644
+index e6cb169af9070088532e14dd28034c97a7e204bc..59010f2e0ddf4d7cae2606cba6b7dd7c5353d49c 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -285,7 +285,7 @@ public final class NaturalSpawner {
+@@ -290,7 +290,7 @@ public final class NaturalSpawner {
          ChunkGenerator generator = level.getChunkSource().getGenerator();
          LevelReader spawnLevel = snapshot != null ? snapshot.levelReader : level;
          int y = pos.getY();
@@ -21,7 +17,7 @@ index 15b11bc..6078180 100644
          if (blockState != null && !blockState.isRedstoneConductor(chunk, pos)) { // Paper - don't load chunks for mob spawn
              BlockPos.MutableBlockPos mutableBlockPos = new BlockPos.MutableBlockPos();
              int i = 0;
-@@ -308,7 +308,7 @@ public final class NaturalSpawner {
+@@ -313,7 +313,7 @@ public final class NaturalSpawner {
                      Player nearestPlayer = level.getNearestPlayer(d, y, d1, -1.0, false);
                      if (nearestPlayer != null) {
                          double d2 = nearestPlayer.distanceToSqr(d, y, d1);
@@ -30,7 +26,7 @@ index 15b11bc..6078180 100644
                              if (spawnerData == null) {
                                  Optional<MobSpawnSettings.SpawnerData> randomSpawnMobAt = getRandomSpawnMobAt(
                                      level, structureManager, generator, category, level.random, mutableBlockPos, spawnLevel
-@@ -374,6 +374,27 @@ public final class NaturalSpawner {
+@@ -379,6 +379,27 @@ public final class NaturalSpawner {
          }
      }
  
@@ -58,18 +54,3 @@ index 15b11bc..6078180 100644
      private static boolean isRightDistanceToPlayerAndSpawnPoint(ServerLevel level, ChunkAccess chunk, BlockPos.MutableBlockPos pos, double distance) {
          if (distance <= 576.0) {
              return false;
-diff --git a/net/minecraft/world/level/chunk/PalettedContainer.java b/net/minecraft/world/level/chunk/PalettedContainer.java
-index a251ba6..d70f29f 100644
---- a/net/minecraft/world/level/chunk/PalettedContainer.java
-+++ b/net/minecraft/world/level/chunk/PalettedContainer.java
-@@ -153,6 +153,7 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
-         this.registry = other.registry;
-         this.strategy = other.strategy;
-         this.data = other.data.copy(this);
-+        this.updateData(this.data); // Paper - optimise palette reads
-     }
- 
-     // Paper start - Anti-Xray - Add preset values
--- 
-2.47.3
-

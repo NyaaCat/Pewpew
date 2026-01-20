@@ -1,0 +1,407 @@
+From 7885ea23ef2cda6bde258a2e198625be90cb5ed6 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Tue, 20 Jan 2026 02:52:19 +0000
+Subject: [PATCH] Fix async pathing compat for 1.21.11
+
+---
+ .../world/entity/ai/behavior/AcquirePoi.java  |   2 +-
+ .../behavior/SetClosestHomeAsWalkTarget.java  |   2 +-
+ .../entity/ai/navigation/PathNavigation.java  |  11 +-
+ net/minecraft/world/level/NaturalSpawner.java |   6 +
+ .../world/level/pathfinder/AsyncPath.java     | 185 ++----------------
+ .../level/pathfinder/AsyncPathService.java    |  15 +-
+ .../SnapshotPathNavigationRegion.java         |   3 +-
+ 7 files changed, 38 insertions(+), 186 deletions(-)
+
+diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+index a42c5e6..fdc63a5 100644
+--- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
++++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
+@@ -130,7 +130,7 @@ public class AcquirePoi {
+                                                 mob.getBrain().setMemory(acquiringMemory, GlobalPos.of(level.dimension(), target));
+                                                 entityEventId.ifPresent(id -> level.broadcastEntityEvent(mob, id));
+                                                 map.clear();
+-                                                DebugPackets.sendPoiTicketCountPacket(level, target);
++                                                level.debugSynchronizers().updatePoi(target);
+                                             });
+                                         } else {
+                                             long now = level.getGameTime();
+diff --git a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
+index 4069d73..ce74b70 100644
+--- a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
++++ b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
+@@ -89,7 +89,7 @@ public class SetClosestHomeAsWalkTarget {
+                                                 Optional<Holder<PoiType>> type = poiManager.getType(target);
+                                                 if (type.isPresent()) {
+                                                     mob.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(target, speedModifier, 1));
+-                                                    DebugPackets.sendPoiTicketCountPacket(level, target);
++                                                    level.debugSynchronizers().updatePoi(target);
+                                                 }
+                                             } else if (mutableInt.getValue() < 5) {
+                                                 map.long2LongEntrySet().removeIf(entry -> entry.getLongValue() < mutableLong.getValue());
+diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index 785febb..2470cc3 100644
+--- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -192,11 +192,11 @@ public abstract class PathNavigation {
+             BlockPos blockPos = offsetUpward ? this.mob.blockPosition().above() : this.mob.blockPosition();
+             int i = (int)(followRange + regionOffset);
+             if (this.level instanceof ServerLevel serverLevel) {
+-                Path asyncPath = AsyncPathService.schedule(serverLevel, this.mob, this, targets, blockPos, i, accuracy, followRange);
++                Path asyncPath = AsyncPathService.schedule(serverLevel, this.mob, this, targets, blockPos, i, reachRange, followRange);
+                 if (asyncPath != null) {
+                     profilerFiller.pop();
+                     this.targetPos = asyncPath.getTarget();
+-                    this.reachRange = accuracy;
++                    this.reachRange = reachRange;
+                     this.resetStuckTimeout();
+                     return asyncPath;
+                 }
+@@ -260,8 +260,8 @@ public abstract class PathNavigation {
+                 this.path = path;
+             }
+ 
+-            if (AsyncPath.isPending(pathentity)) {
+-                this.speedModifier = speed;
++            if (AsyncPath.isPending(path)) {
++                this.speedModifier = speedModifier;
+                 Vec3 tempMobPos = this.getTempMobPos();
+                 this.lastStuckCheck = this.tick;
+                 this.lastStuckCheckPos = tempMobPos;
+@@ -290,9 +290,10 @@ public abstract class PathNavigation {
+     }
+ 
+     public void applyAsyncPath(AsyncPath asyncPath, Path path, int accuracy) {
+-        if (this.path != asyncPath) {
++        if (this.path != asyncPath.pendingPath()) {
+             return;
+         }
++        this.path = path;
+         this.targetPos = path.getTarget();
+         this.reachRange = accuracy;
+         this.resetStuckTimeout();
+diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
+index 4b357c5..0581d65 100644
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -31,6 +31,7 @@ import net.minecraft.util.VisibleForDebug;
+ import net.minecraft.util.profiling.Profiler;
+ import net.minecraft.util.profiling.ProfilerFiller;
+ import net.minecraft.util.random.WeightedList;
++import net.minecraft.world.attribute.EnvironmentAttributeReader;
+ import net.minecraft.world.flag.FeatureFlagSet;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.EntitySpawnReason;
+@@ -865,6 +866,11 @@ public final class NaturalSpawner {
+             return this.level.enabledFeatures();
+         }
+ 
++        @Override
++        public EnvironmentAttributeReader environmentAttributes() {
++            return this.level.environmentAttributes();
++        }
++
+         @Override
+         public boolean isClientSide() {
+             return this.level.isClientSide();
+diff --git a/net/minecraft/world/level/pathfinder/AsyncPath.java b/net/minecraft/world/level/pathfinder/AsyncPath.java
+index fd30f65..76beb0c 100644
+--- a/net/minecraft/world/level/pathfinder/AsyncPath.java
++++ b/net/minecraft/world/level/pathfinder/AsyncPath.java
+@@ -1,26 +1,31 @@
+ package net.minecraft.world.level.pathfinder;
+ 
+-import java.util.Collections;
+ import java.util.List;
++import java.util.concurrent.ConcurrentHashMap;
+ import javax.annotation.Nullable;
+ import net.minecraft.core.BlockPos;
+-import net.minecraft.world.entity.Entity;
+-import net.minecraft.world.phys.Vec3;
+ 
+-public final class AsyncPath extends Path {
++public final class AsyncPath {
++    private static final ConcurrentHashMap<Path, AsyncPath> PENDING = new ConcurrentHashMap<>();
+     private final long requestId;
++    private final Path pendingPath;
+     @Nullable
+     private volatile Path resolved;
+ 
+     public AsyncPath(final long requestId, final BlockPos target) {
+-        super(Collections.emptyList(), target, false);
+         this.requestId = requestId;
++        this.pendingPath = new Path(List.of(), target, false);
++        PENDING.put(this.pendingPath, this);
+     }
+ 
+     public long requestId() {
+         return this.requestId;
+     }
+ 
++    public Path pendingPath() {
++        return this.pendingPath;
++    }
++
+     public boolean isReady() {
+         return this.resolved != null;
+     }
+@@ -31,173 +36,11 @@ public final class AsyncPath extends Path {
+     }
+ 
+     void complete(@Nullable final Path path) {
+-        this.resolved = path == null ? new Path(List.of(), this.getTarget(), false) : path;
++        this.resolved = path == null ? new Path(List.of(), this.pendingPath.getTarget(), false) : path;
++        PENDING.remove(this.pendingPath);
+     }
+ 
+     public static boolean isPending(@Nullable final Path path) {
+-        return path instanceof AsyncPath asyncPath && !asyncPath.isReady();
+-    }
+-
+-    @Override
+-    public void advance() {
+-        Path path = this.resolved;
+-        if (path != null) {
+-            path.advance();
+-        }
+-    }
+-
+-    @Override
+-    public boolean notStarted() {
+-        Path path = this.resolved;
+-        return path == null || path.notStarted();
+-    }
+-
+-    @Override
+-    public boolean isDone() {
+-        Path path = this.resolved;
+-        return path != null && path.isDone();
+-    }
+-
+-    @Nullable
+-    @Override
+-    public Node getEndNode() {
+-        Path path = this.resolved;
+-        return path == null ? null : path.getEndNode();
+-    }
+-
+-    @Override
+-    public Node getNode(int index) {
+-        Path path = this.resolved;
+-        if (path == null) {
+-            return new Node(this.getTarget().getX(), this.getTarget().getY(), this.getTarget().getZ());
+-        }
+-        return path.getNode(index);
+-    }
+-
+-    @Override
+-    public void truncateNodes(int length) {
+-        Path path = this.resolved;
+-        if (path != null) {
+-            path.truncateNodes(length);
+-        }
+-    }
+-
+-    @Override
+-    public void replaceNode(int index, Node point) {
+-        Path path = this.resolved;
+-        if (path != null) {
+-            path.replaceNode(index, point);
+-        }
+-    }
+-
+-    @Override
+-    public int getNodeCount() {
+-        Path path = this.resolved;
+-        return path == null ? 0 : path.getNodeCount();
+-    }
+-
+-    @Override
+-    public int getNextNodeIndex() {
+-        Path path = this.resolved;
+-        return path == null ? 0 : path.getNextNodeIndex();
+-    }
+-
+-    @Override
+-    public void setNextNodeIndex(int currentPathIndex) {
+-        Path path = this.resolved;
+-        if (path != null) {
+-            path.setNextNodeIndex(currentPathIndex);
+-        }
+-    }
+-
+-    @Override
+-    public Vec3 getEntityPosAtNode(Entity entity, int index) {
+-        Path path = this.resolved;
+-        return path == null ? entity.position() : path.getEntityPosAtNode(entity, index);
+-    }
+-
+-    @Override
+-    public BlockPos getNodePos(int index) {
+-        Path path = this.resolved;
+-        return path == null ? this.getTarget() : path.getNodePos(index);
+-    }
+-
+-    @Override
+-    public Vec3 getNextEntityPos(Entity entity) {
+-        Path path = this.resolved;
+-        return path == null ? entity.position() : path.getNextEntityPos(entity);
+-    }
+-
+-    @Override
+-    public BlockPos getNextNodePos() {
+-        Path path = this.resolved;
+-        return path == null ? this.getTarget() : path.getNextNodePos();
+-    }
+-
+-    @Override
+-    public Node getNextNode() {
+-        Path path = this.resolved;
+-        if (path == null) {
+-            return new Node(this.getTarget().getX(), this.getTarget().getY(), this.getTarget().getZ());
+-        }
+-        return path.getNextNode();
+-    }
+-
+-    @Nullable
+-    @Override
+-    public Node getPreviousNode() {
+-        Path path = this.resolved;
+-        return path == null ? null : path.getPreviousNode();
+-    }
+-
+-    @Override
+-    public boolean sameAs(@Nullable Path other) {
+-        Path path = this.resolved;
+-        if (path == null) {
+-            return false;
+-        }
+-        return path.sameAs(other);
+-    }
+-
+-    @Override
+-    public boolean canReach() {
+-        Path path = this.resolved;
+-        return path != null && path.canReach();
+-    }
+-
+-    @Nullable
+-    @Override
+-    public Path.DebugData debugData() {
+-        Path path = this.resolved;
+-        return path == null ? null : path.debugData();
+-    }
+-
+-    @Override
+-    public void writeToStream(net.minecraft.network.FriendlyByteBuf buffer) {
+-        Path path = this.resolved;
+-        if (path != null) {
+-            path.writeToStream(buffer);
+-        }
+-    }
+-
+-    @Override
+-    public BlockPos getTarget() {
+-        Path path = this.resolved;
+-        return path == null ? super.getTarget() : path.getTarget();
+-    }
+-
+-    @Override
+-    public float getDistToTarget() {
+-        Path path = this.resolved;
+-        return path == null ? Float.MAX_VALUE : path.getDistToTarget();
+-    }
+-
+-    @Override
+-    public Path copy() {
+-        Path path = this.resolved;
+-        if (path == null) {
+-            return new Path(List.of(), this.getTarget(), false);
+-        }
+-        return path.copy();
++        return path != null && PENDING.containsKey(path);
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/net/minecraft/world/level/pathfinder/AsyncPathService.java b/net/minecraft/world/level/pathfinder/AsyncPathService.java
+index 59f07a4..549850e 100644
+--- a/net/minecraft/world/level/pathfinder/AsyncPathService.java
++++ b/net/minecraft/world/level/pathfinder/AsyncPathService.java
+@@ -118,7 +118,7 @@ public final class AsyncPathService {
+         final UUID mobId = mob.getUUID();
+         PendingRequest existing = this.pending.get(mobId);
+         if (existing != null) {
+-            return existing.asyncPath;
++            return existing.asyncPath.pendingPath();
+         }
+         init();
+         final ThreadPoolExecutor executor = this.executor;
+@@ -153,7 +153,7 @@ public final class AsyncPathService {
+         );
+         if (this.pending.putIfAbsent(mobId, request) != null) {
+             PendingRequest current = this.pending.get(mobId);
+-            return current == null ? null : current.asyncPath;
++            return current == null ? null : current.asyncPath.pendingPath();
+         }
+         try {
+             executor.execute(request::runAsync);
+@@ -161,7 +161,7 @@ public final class AsyncPathService {
+             this.pending.remove(mobId, request);
+             return null;
+         }
+-        return asyncPath;
++        return asyncPath.pendingPath();
+     }
+ 
+     private boolean schedulePoiInternal(
+@@ -354,12 +354,15 @@ public final class AsyncPathService {
+             }
+             final Entity entity = this.level.getEntity(this.mobId);
+             if (!(entity instanceof Mob mob) || !mob.isAlive()) {
++                this.asyncPath.complete(null);
+                 return;
+             }
+             if (mob.getNavigation() != this.navigation) {
++                this.asyncPath.complete(null);
+                 return;
+             }
+-            if (this.navigation.getPath() != this.asyncPath) {
++            if (this.navigation.getPath() != this.asyncPath.pendingPath()) {
++                this.asyncPath.complete(null);
+                 return;
+             }
+             if (!mob.blockPosition().closerThan(this.originPos, 8.0)) {
+@@ -376,7 +379,7 @@ public final class AsyncPathService {
+ 
+         private void completeFailure() {
+             this.asyncPath.complete(null);
+-            if (this.navigation.getPath() == this.asyncPath) {
++            if (this.navigation.getPath() == this.asyncPath.pendingPath()) {
+                 this.navigation.stop();
+             }
+         }
+@@ -485,4 +488,4 @@ public final class AsyncPathService {
+             this.callback.accept(path);
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java b/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
+index 1107234..bc6e844 100644
+--- a/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
++++ b/net/minecraft/world/level/pathfinder/SnapshotPathNavigationRegion.java
+@@ -118,8 +118,7 @@ public final class SnapshotPathNavigationRegion implements CollisionGetter {
+             }
+         }
+ 
+-        WorldBorder border = new WorldBorder();
+-        border.applySettings(level.getWorldBorder().createSettings());
++        WorldBorder border = new WorldBorder(new WorldBorder.Settings(level.getWorldBorder()));
+         return new SnapshotPathNavigationRegion(
+             minChunkX,
+             minChunkZ,
+-- 
+2.47.3
+

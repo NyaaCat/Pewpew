@@ -5,7 +5,7 @@ Subject: [PATCH] Pin world tick workers and prefer dedicated worlds
 
 
 diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
-index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a0854a74846f 100644
+index ed89c76586de51cdc4f50597e974e1aae47b0bc8..6562c67703c7191326b5ec2462992f272d28e545 100644
 --- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 +++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 @@ -1,17 +1,19 @@
@@ -39,7 +39,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
      private static final long DEFAULT_STALL_THRESHOLD_NANOS = 50_000_000L;
      private static final String THREAD_NAME_PREFIX = "Pewpew-Tick-";
  
-@@ -35,11 +38,14 @@ public final class WorldTickCoordinator {
+@@ -35,12 +38,15 @@ public final class WorldTickCoordinator {
      private final AtomicLong maxStallNanos = new AtomicLong();
      private final AtomicInteger threadIds = new AtomicInteger();
      private final AtomicReference<TickBarrier> inFlightBarrier = new AtomicReference<>();
@@ -47,6 +47,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
 -    private volatile ThreadPoolExecutor executor;
 +    private final Object workerLock = new Object();
      private final SnapshotManager snapshotManager = new SnapshotManager();
+     private final CommitQueue globalCommitQueue = new CommitQueue();
      private final ConcurrentHashMap<String, CommitQueue> commitQueues = new ConcurrentHashMap<>();
      private final ConcurrentHashMap<String, AtomicLong> generationsByWorld = new ConcurrentHashMap<>();
 +    private final Map<String, WorldTickWorker> worldAssignments = new LinkedHashMap<>();
@@ -56,7 +57,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
  
      private WorldTickCoordinator() {
      }
-@@ -63,7 +69,7 @@ public final class WorldTickCoordinator {
+@@ -64,7 +70,7 @@ public final class WorldTickCoordinator {
          if (!this.initialized.compareAndSet(false, true)) {
              return;
          }
@@ -65,7 +66,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
      }
  
      public TickBarrier dispatchWorldTicks(final Map<String, Runnable> worldTasks) {
-@@ -76,8 +82,8 @@ public final class WorldTickCoordinator {
+@@ -77,8 +83,8 @@ public final class WorldTickCoordinator {
              return TickBarrier.completed();
          }
          init();
@@ -76,7 +77,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
              runInline(worldTasks);
              return TickBarrier.completed();
          }
-@@ -86,12 +92,12 @@ public final class WorldTickCoordinator {
+@@ -87,12 +93,12 @@ public final class WorldTickCoordinator {
          for (final Map.Entry<String, Runnable> entry : worldTasks.entrySet()) {
              final String worldName = Objects.requireNonNull(entry.getKey(), "worldName");
              final Runnable task = Objects.requireNonNull(entry.getValue(), "task");
@@ -93,7 +94,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
          }
          return barrier;
      }
-@@ -105,12 +111,15 @@ public final class WorldTickCoordinator {
+@@ -106,12 +112,15 @@ public final class WorldTickCoordinator {
      }
  
      public void shutdownForTesting() {
@@ -114,7 +115,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
          this.initialized.set(false);
      }
  
-@@ -227,47 +236,169 @@ public final class WorldTickCoordinator {
+@@ -236,47 +245,169 @@ public final class WorldTickCoordinator {
          return this.commitQueues.computeIfAbsent(worldName, key -> new CommitQueue());
      }
  
@@ -316,7 +317,7 @@ index 660041dcc420c5506d8aabe80354d0debfca42c9..c2385d644920f71dcebd383f7f93a085
      }
  
      private void runInline(final Map<String, Runnable> worldTasks) {
-@@ -461,4 +592,91 @@ public final class WorldTickCoordinator {
+@@ -470,4 +601,91 @@ public final class WorldTickCoordinator {
              throw new IllegalStateException("Tick task failed", thrown);
          }
      }

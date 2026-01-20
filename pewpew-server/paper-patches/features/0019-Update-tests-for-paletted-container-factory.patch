@@ -1,0 +1,143 @@
+From 8773c4583890dd31cd5854e4493b2b18acb8c83b Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Tue, 20 Jan 2026 03:07:49 +0000
+Subject: [PATCH] Update tests for paletted container factory
+
+---
+ .../pewpew/LevelChunkSectionVersionTest.java  | 35 +++----------------
+ .../SnapshotPathNavigationRegionTest.java     | 34 +++---------------
+ 2 files changed, 9 insertions(+), 60 deletions(-)
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java b/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
+index 88fe71598..4c80424f5 100644
+--- a/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
+@@ -3,23 +3,17 @@ package io.papermc.paper.pewpew;
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertTrue;
+ 
+-import com.mojang.serialization.Lifecycle;
+-import net.minecraft.core.MappedRegistry;
+-import net.minecraft.core.RegistrationInfo;
+-import net.minecraft.core.registries.Registries;
+-import net.minecraft.world.level.biome.Biome;
+-import net.minecraft.world.level.biome.BiomeGenerationSettings;
+-import net.minecraft.world.level.biome.BiomeSpecialEffects;
+-import net.minecraft.world.level.biome.Biomes;
+-import net.minecraft.world.level.biome.MobSpawnSettings;
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.chunk.LevelChunkSection;
++import org.bukkit.support.RegistryHelper;
++import org.bukkit.support.environment.Normal;
+ import org.junit.jupiter.api.Test;
+ 
++@Normal
+ public class LevelChunkSectionVersionTest {
+     @Test
+     public void changeVersionIncrementsOnMutation() {
+-        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
++        LevelChunkSection section = new LevelChunkSection(RegistryHelper.context().palettedContainerFactory().get());
+         long initial = section.getChangeVersion();
+ 
+         section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
+@@ -34,23 +28,4 @@ public class LevelChunkSectionVersionTest {
+         long afterSecond = section.getChangeVersion();
+         assertTrue(afterSecond > afterSame, "expected change version to increment on state change");
+     }
+-
+-    private static MappedRegistry<Biome> buildTestBiomeRegistry() {
+-        MappedRegistry<Biome> registry = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
+-        BiomeSpecialEffects effects = new BiomeSpecialEffects.Builder()
+-            .fogColor(0)
+-            .waterColor(0)
+-            .waterFogColor(0)
+-            .skyColor(0)
+-            .build();
+-        Biome biome = new Biome.BiomeBuilder()
+-            .temperature(0.8F)
+-            .downfall(0.4F)
+-            .specialEffects(effects)
+-            .mobSpawnSettings(MobSpawnSettings.EMPTY)
+-            .generationSettings(BiomeGenerationSettings.EMPTY)
+-            .build();
+-        registry.register(Biomes.PLAINS, biome, RegistrationInfo.BUILT_IN);
+-        return registry;
+-    }
+-}
+\ No newline at end of file
++}
+diff --git a/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java b/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
+index ad6801402..97f98a3fb 100644
+--- a/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
+@@ -6,23 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
+ import static org.mockito.Mockito.mock;
+ import static org.mockito.Mockito.when;
+ 
+-import com.mojang.serialization.Lifecycle;
+ import net.minecraft.core.BlockPos;
+-import net.minecraft.core.MappedRegistry;
+-import net.minecraft.core.RegistrationInfo;
+-import net.minecraft.core.registries.Registries;
+ import net.minecraft.server.level.ServerChunkCache;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.world.level.border.WorldBorder;
+-import net.minecraft.world.level.biome.Biome;
+-import net.minecraft.world.level.biome.BiomeGenerationSettings;
+-import net.minecraft.world.level.biome.BiomeSpecialEffects;
+-import net.minecraft.world.level.biome.Biomes;
+-import net.minecraft.world.level.biome.MobSpawnSettings;
+ import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.chunk.LevelChunk;
+ import net.minecraft.world.level.chunk.LevelChunkSection;
+ import net.minecraft.world.level.pathfinder.SnapshotPathNavigationRegion;
++import org.bukkit.support.RegistryHelper;
+ import org.bukkit.support.environment.Normal;
+ import org.junit.jupiter.api.Test;
+ 
+@@ -30,7 +22,7 @@ import org.junit.jupiter.api.Test;
+ class SnapshotPathNavigationRegionTest {
+     @Test
+     void snapshotDetectsSectionChanges() {
+-        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
++        LevelChunkSection section = new LevelChunkSection(RegistryHelper.context().palettedContainerFactory().get());
+         section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
+ 
+         LevelChunk chunk = mockChunk(section);
+@@ -50,7 +42,7 @@ class SnapshotPathNavigationRegionTest {
+ 
+     @Test
+     void snapshotUsesCopiedStates() {
+-        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
++        LevelChunkSection section = new LevelChunkSection(RegistryHelper.context().palettedContainerFactory().get());
+         section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
+ 
+         LevelChunk chunk = mockChunk(section);
+@@ -90,22 +82,4 @@ class SnapshotPathNavigationRegionTest {
+         return level;
+     }
+ 
+-    private static MappedRegistry<Biome> buildTestBiomeRegistry() {
+-        MappedRegistry<Biome> registry = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
+-        BiomeSpecialEffects effects = new BiomeSpecialEffects.Builder()
+-            .fogColor(0)
+-            .waterColor(0)
+-            .waterFogColor(0)
+-            .skyColor(0)
+-            .build();
+-        Biome biome = new Biome.BiomeBuilder()
+-            .temperature(0.8F)
+-            .downfall(0.4F)
+-            .specialEffects(effects)
+-            .mobSpawnSettings(MobSpawnSettings.EMPTY)
+-            .generationSettings(BiomeGenerationSettings.EMPTY)
+-            .build();
+-        registry.register(Biomes.PLAINS, biome, RegistrationInfo.BUILT_IN);
+-        return registry;
+-    }
+-}
+\ No newline at end of file
++}
+-- 
+2.47.3
+

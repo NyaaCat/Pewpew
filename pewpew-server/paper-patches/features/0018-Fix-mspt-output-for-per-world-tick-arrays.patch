@@ -1,0 +1,47 @@
+From d1e4f075114cc09ce6ea5e9e3d147e3320bebc0b Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Tue, 20 Jan 2026 02:52:54 +0000
+Subject: [PATCH] Fix mspt output for per-world tick arrays
+
+---
+ .../io/papermc/paper/command/MSPTCommand.java | 24 +++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/src/main/java/io/papermc/paper/command/MSPTCommand.java b/src/main/java/io/papermc/paper/command/MSPTCommand.java
+index 9733ff4fe..3009a1cdc 100644
+--- a/src/main/java/io/papermc/paper/command/MSPTCommand.java
++++ b/src/main/java/io/papermc/paper/command/MSPTCommand.java
+@@ -111,6 +111,30 @@ public final class MSPTCommand extends Command {
+         return Arrays.asList(getColor(avgD), getColor(minD), getColor(maxD));
+     }
+ 
++    private static List<Component> eval(long[] times) {
++        long min = Long.MAX_VALUE;
++        long max = Long.MIN_VALUE;
++        long total = 0L;
++        int count = 0;
++        for (long time : times) {
++            if (time <= 0L) {
++                continue;
++            }
++            total += time;
++            count++;
++            if (time < min) {
++                min = time;
++            }
++            if (time > max) {
++                max = time;
++            }
++        }
++        double avgD = count == 0 ? 0.0 : ((double) total / (double) count) * 1.0E-6D;
++        double minD = min == Long.MAX_VALUE ? 0.0 : min * 1.0E-6D;
++        double maxD = max == Long.MIN_VALUE ? 0.0 : max * 1.0E-6D;
++        return Arrays.asList(getColor(avgD), getColor(minD), getColor(maxD));
++    }
++
+     private static Component getColor(double avg) {
+         return text(ONE_DECIMAL_PLACES.get().format(avg), avg >= 50 ? RED : avg >= 40 ? YELLOW : GREEN);
+     }
+-- 
+2.47.3
+

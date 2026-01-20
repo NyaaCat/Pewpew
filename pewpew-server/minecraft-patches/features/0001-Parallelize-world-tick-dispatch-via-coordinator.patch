@@ -5,10 +5,10 @@ Subject: [PATCH] Parallelize world tick dispatch via coordinator
 
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9b7a9370b 100644
+index c2227d57ea2e2da537a313d4bfd2f8c7f776be64..89dacab667fa3dbc75547418e74f02c7f897f013 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1705,32 +1705,79 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1804,34 +1804,81 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
          }
  
          this.isIteratingOverLevels = true; // Paper - Throw exception on world create while being ticked
@@ -17,7 +17,7 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9
 -            serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
 -            serverLevel.updateLagCompensationTick(); // Paper - lag compensation
 -            net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
--            profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().location());
+-            profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
 -            /* Drop global time updates
 -            if (this.tickCount % 20 == 0) {
 -                profilerFiller.push("timeSync");
@@ -28,14 +28,14 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9
 +        if (io.papermc.paper.pewpew.WorldTickCoordinator.isEnabled()) {
 +            Map<String, Runnable> worldTasks = Maps.newLinkedHashMap();
 +            for (ServerLevel serverLevel : this.getAllLevels()) {
-+                final String worldKey = serverLevel.dimension().location().toString();
++                final String worldKey = serverLevel.dimension().identifier().toString();
 +                worldTasks.put(worldKey, () -> {
 +                    ProfilerFiller worldProfiler = Profiler.get();
 +                    serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
 +                    serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
 +                    serverLevel.updateLagCompensationTick(); // Paper - lag compensation
 +                    net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
-+                    worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().location());
++                    worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
 +                    /* Drop global time updates
 +                    if (this.tickCount % 20 == 0) {
 +                        worldProfiler.push("timeSync");
@@ -80,7 +80,7 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9
 +                serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
 +                serverLevel.updateLagCompensationTick(); // Paper - lag compensation
 +                net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
-+                profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().location());
++                profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
 +                /* Drop global time updates
 +                if (this.tickCount % 20 == 0) {
 +                    profilerFiller.push("timeSync");
@@ -88,7 +88,10 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9
 +                    profilerFiller.pop();
 +                }
 +                // CraftBukkit end */
-+
+ 
+-            profilerFiller.pop();
+-            profilerFiller.pop();
+-            serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
 +                io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(serverLevel.getWorld().getName()));
 +                profilerFiller.push("tick");
 +
@@ -99,10 +102,7 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9
 +                    serverLevel.fillReportDetails(crashReport);
 +                    throw new ReportedException(crashReport);
 +                }
- 
--            profilerFiller.pop();
--            profilerFiller.pop();
--            serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
++
 +                profilerFiller.pop();
 +                profilerFiller.pop();
 +                serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
@@ -110,3 +110,5 @@ index 9243bb11e3f968d0bf0eb2e3dc9295c0232bc15d..d3bfee1b6d6da25a1e976c04ce5b3ab9
          }
 +        io.papermc.paper.pewpew.WorldTickCoordinator.get().drainGlobalCommits();
          this.isIteratingOverLevels = false; // Paper - Throw exception on world create while being ticked
+ 
+         profilerFiller.popPush("connection");

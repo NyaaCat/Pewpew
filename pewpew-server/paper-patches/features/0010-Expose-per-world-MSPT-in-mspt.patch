@@ -5,18 +5,18 @@ Subject: [PATCH] Expose per-world MSPT in /mspt
 
 
 diff --git a/src/main/java/io/papermc/paper/command/MSPTCommand.java b/src/main/java/io/papermc/paper/command/MSPTCommand.java
-index 8b5293b0c696ef21d0101493ffa41b60bf0bc86b..5f472893b4f827a957034201acc136210b1c09fc 100644
+index 04b8097b147350f97fdee16c0b8aa78a87fddd33..9733ff4fef2c586abb8e41a9fef3a6fb9154ed23 100644
 --- a/src/main/java/io/papermc/paper/command/MSPTCommand.java
 +++ b/src/main/java/io/papermc/paper/command/MSPTCommand.java
-@@ -2,6 +2,7 @@ package io.papermc.paper.command;
- 
+@@ -3,6 +3,7 @@ package io.papermc.paper.command;
+ import ca.spottedleaf.moonrise.common.time.TickData;
  import net.kyori.adventure.text.Component;
  import net.minecraft.server.MinecraftServer;
 +import net.minecraft.server.level.ServerLevel;
  import org.bukkit.Location;
  import org.bukkit.command.Command;
  import org.bukkit.command.CommandSender;
-@@ -78,6 +79,23 @@ public final class MSPTCommand extends Command {
+@@ -82,6 +83,23 @@ public final class MSPTCommand extends Command {
                  )
              )
          );

@@ -5,18 +5,18 @@ Subject: [PATCH] Invalidate async caches on world unload
 
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 12d98f06b23f13c2f267463556094078d27f6a3f..0e3ff135c166c27d825a11f382ed711b14cd9f0f 100644
+index b5398e60c88a712e15dd16e9b5af666bbd5188a9..d38ddc14555f87a0a97d895fe9eb18d7e4871cac 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -13,6 +13,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
- import com.mojang.serialization.Dynamic;
+@@ -14,6 +14,7 @@ import com.mojang.serialization.Dynamic;
  import com.mojang.serialization.Lifecycle;
+ import io.papermc.paper.configuration.GlobalConfiguration;
  import io.papermc.paper.pewpew.PewpewConfig;
 +import io.papermc.paper.pewpew.AsyncSensorService;
  import io.papermc.paper.pewpew.WorldTickCoordinator;
  import io.papermc.paper.configuration.PaperServerConfiguration;
  import io.papermc.paper.configuration.ServerConfiguration;
-@@ -70,6 +71,7 @@ import net.minecraft.server.dedicated.DedicatedServer;
+@@ -67,6 +68,7 @@ import net.minecraft.server.dedicated.DedicatedServer;
  import net.minecraft.server.dedicated.DedicatedServerProperties;
  import net.minecraft.server.dedicated.DedicatedServerSettings;
  import net.minecraft.server.level.ServerLevel;
@@ -24,7 +24,7 @@ index 12d98f06b23f13c2f267463556094078d27f6a3f..0e3ff135c166c27d825a11f382ed711b
  import net.minecraft.server.level.ServerPlayer;
  import net.minecraft.server.level.TicketType;
  import net.minecraft.server.players.IpBanListEntry;
-@@ -1469,6 +1471,10 @@ public final class CraftServer implements Server {
+@@ -1366,6 +1368,10 @@ public final class CraftServer implements Server {
  
          this.worlds.remove(world.getName().toLowerCase(Locale.ROOT));
          this.console.removeLevel(handle);

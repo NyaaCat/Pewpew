@@ -5,10 +5,10 @@ Subject: [PATCH] Disable mid-tick chunk tasks under world tick coordinator
 
 
 diff --git a/net/minecraft/server/level/ServerChunkCache.java b/net/minecraft/server/level/ServerChunkCache.java
-index 2882cd829d4d8e1f8615f085f6908efcdf68ac62..a909843e5731d2783c64688c9089b635a7a5a301 100644
+index af67b07722bb0125acd081dab767d7e7b360623b..f7122f640a7c68aecc3c105b29dc01372d972c2a 100644
 --- a/net/minecraft/server/level/ServerChunkCache.java
 +++ b/net/minecraft/server/level/ServerChunkCache.java
-@@ -177,7 +177,9 @@ public class ServerChunkCache extends ChunkSource implements ca.spottedleaf.moon
+@@ -176,7 +176,9 @@ public class ServerChunkCache extends ChunkSource implements ca.spottedleaf.moon
  
              // call mid-tick tasks for chunk system
              if ((i & 7) == 0) {
@@ -20,10 +20,10 @@ index 2882cd829d4d8e1f8615f085f6908efcdf68ac62..a909843e5731d2783c64688c9089b635
              }
          }
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index 99043a48bada436fffe377891e8156fdb878f526..ff583192ef4e0ecd8a296192b535d81c934fb6b3 100644
+index cf574b16cca17f7ff24583acc88d5666aecf7697..29b229835897f68ad922b59017923e9915073a65 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -329,6 +329,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+@@ -343,6 +343,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
  
      @Override
      public final void moonrise$midTickTasks() {
@@ -33,7 +33,7 @@ index 99043a48bada436fffe377891e8156fdb878f526..ff583192ef4e0ecd8a296192b535d81c
          ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
      }
  
-@@ -1233,7 +1236,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+@@ -1310,7 +1313,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
          }
          // Paper start - rewrite chunk system
          if ((++this.tickedBlocksOrFluids & 7L) != 0L) {
@@ -44,7 +44,7 @@ index 99043a48bada436fffe377891e8156fdb878f526..ff583192ef4e0ecd8a296192b535d81c
          }
          // Paper end - rewrite chunk system
  
-@@ -1246,7 +1251,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+@@ -1323,7 +1328,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
          }
          // Paper start - rewrite chunk system
          if ((++this.tickedBlocksOrFluids & 7L) != 0L) {
@@ -56,10 +56,10 @@ index 99043a48bada436fffe377891e8156fdb878f526..ff583192ef4e0ecd8a296192b535d81c
          // Paper end - rewrite chunk system
  
 diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
-index d541d17c8ccd350d6b7aaf4d256d37a5061dedd4..d1dc7ccba89dbf44ebf0e90960ce80c7c9a88726 100644
+index b382133d5602cfa6192e43993447af09f6c7aed9..cba57a804cb7b2ce62748c28bf92b44da8610098 100644
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
-@@ -1464,7 +1464,9 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
+@@ -1410,7 +1410,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
                  tickingBlockEntity.tick();
                  // Paper start - rewrite chunk system
                  if ((++tickedEntities & 7) == 0) {
@@ -70,7 +70,7 @@ index d541d17c8ccd350d6b7aaf4d256d37a5061dedd4..d1dc7ccba89dbf44ebf0e90960ce80c7
                  }
                  // Paper end - rewrite chunk system
              }
-@@ -1487,7 +1489,9 @@ public abstract class Level implements LevelAccessor, UUIDLookup<Entity>, AutoCl
+@@ -1432,7 +1434,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
              entity.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD);
              // Paper end - Prevent block entity and entity crashes
          }

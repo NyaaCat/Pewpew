@@ -5,10 +5,10 @@ Subject: [PATCH] Defer non-player portal handling under world tick coordinator
 
 
 diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
-index 9a102b2c58446bd0aac5bd7f00e647f0270e7983..51e4ba59f6fe17d5e95bc2a3a2610e9b6c49a737 100644
+index 3bf618f1d756bad7755a87803132bd731e7c41be..47d98de96d8ee7afa7ac1aab00e5226adf2a0fd3 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -835,6 +835,16 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+@@ -845,6 +845,16 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
      public void postTick() {
          // No clean way to break out of ticking once the entity has been copied to a new world, so instead we move the portalling later in the tick cycle
          if (!(this instanceof ServerPlayer) && this.isAlive()) { // Paper - don't attempt to teleport dead entities
