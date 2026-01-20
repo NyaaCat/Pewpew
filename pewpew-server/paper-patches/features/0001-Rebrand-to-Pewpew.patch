@@ -1,15 +1,11 @@
-From 3f033a22fd1dda2dafc334d06b6e4c1f75c16ba0 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Tue, 20 Jan 2026 03:55:52 +0000
 Subject: [PATCH] Rebrand to Pewpew
 
----
- src/main/java/com/destroystokyo/paper/Metrics.java      | 6 +++---
- src/main/java/io/papermc/paper/ServerBuildInfoImpl.java | 4 ++--
- 2 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/src/main/java/com/destroystokyo/paper/Metrics.java b/src/main/java/com/destroystokyo/paper/Metrics.java
-index 9f4d73fd3..b488fbbf6 100644
+index 6abc57669e87f7f98f3b76af3c0e50825fea6eb1..46a4b7097df7b57f409f4a53649be57436d8e1b3 100644
 --- a/src/main/java/com/destroystokyo/paper/Metrics.java
 +++ b/src/main/java/com/destroystokyo/paper/Metrics.java
 @@ -593,7 +593,7 @@ public class Metrics {
@@ -36,7 +32,7 @@ index 9f4d73fd3..b488fbbf6 100644
                  metrics.addCustomChart(new Metrics.DrilldownPie("java_version", () -> {
                      Map<String, Map<String, Integer>> map = new HashMap<>();
 diff --git a/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java b/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
-index 74ffdc823..7838c7bee 100644
+index 74ffdc823e66fc5ec027c4b7c462382bcbfe2be2..7838c7bee847c0552e757bdd2e2f8d657988362c 100644
 --- a/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
 +++ b/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
 @@ -42,9 +42,9 @@ public record ServerBuildInfoImpl(
@@ -51,6 +47,3 @@ index 74ffdc823..7838c7bee 100644
              SharedConstants.getCurrentVersion().id(),
              SharedConstants.getCurrentVersion().name(),
              getManifestAttribute(manifest, ATTRIBUTE_BUILD_NUMBER)
--- 
-2.47.3
-

@@ -1,16 +1,12 @@
-From 4e79554ebb580e958c5c50b1b249f86d1f554905 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Tue, 20 Jan 2026 03:18:19 +0000
 Subject: [PATCH] Add test for null tracker entities
 
----
- .../level/ChunkMapTrackerEntitiesTest.java      | 17 +++++++++++++++++
- 1 file changed, 17 insertions(+)
- create mode 100644 src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java
 
 diff --git a/src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java b/src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java
 new file mode 100644
-index 000000000..74e2b7508
+index 0000000000000000000000000000000000000000..74e2b750851038bc911b3d44ac7c00fb3ee16285
 --- /dev/null
 +++ b/src/test/java/net/minecraft/server/level/ChunkMapTrackerEntitiesTest.java
 @@ -0,0 +1,17 @@
@@ -31,6 +27,3 @@ index 000000000..74e2b7508
 +        assertDoesNotThrow(() -> ChunkMap.tickTrackerEntities(entities, entities.length));
 +    }
 +}
--- 
-2.47.3
-

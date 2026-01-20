@@ -1,14 +1,11 @@
-From d9189889906cf4e42b46ba421294ade4f0c0efd8 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Mon, 19 Jan 2026 18:57:50 +0000
 Subject: [PATCH] Use nearby players list for spawn distance checks
 
----
- net/minecraft/world/level/NaturalSpawner.java | 57 +++++++++++++++----
- 1 file changed, 45 insertions(+), 12 deletions(-)
 
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 56fd07d..84e813e 100644
+index 56fd07d0fc267fce07a821829796e9c346646a35..84e813eab311680e65fa418e3883ede29c35170a 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
 @@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -161,6 +158,3 @@ index 56fd07d..84e813e 100644
      private static boolean isRightDistanceToPlayerAndSpawnPoint(ServerLevel level, ChunkAccess chunk, BlockPos.MutableBlockPos pos, double distance) {
          if (distance <= 576.0) {
              return false;
--- 
-2.47.3
-

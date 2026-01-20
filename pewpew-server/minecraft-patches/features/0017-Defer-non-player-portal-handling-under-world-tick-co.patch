@@ -8,7 +8,7 @@ diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity
 index 9a102b2c58446bd0aac5bd7f00e647f0270e7983..51e4ba59f6fe17d5e95bc2a3a2610e9b6c49a737 100644
 --- a/net/minecraft/world/entity/Entity.java
 +++ b/net/minecraft/world/entity/Entity.java
-@@ -835,6 +835,16 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+@@ -835,6 +835,16 @@ public abstract class Entity implements SyncedDataHolder, Nameable, EntityAccess
      public void postTick() {
          // No clean way to break out of ticking once the entity has been copied to a new world, so instead we move the portalling later in the tick cycle
          if (!(this instanceof ServerPlayer) && this.isAlive()) { // Paper - don't attempt to teleport dead entities

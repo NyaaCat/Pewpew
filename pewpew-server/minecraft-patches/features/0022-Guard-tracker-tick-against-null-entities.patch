@@ -1,17 +1,14 @@
-From 05b9740ea75dc136531d7fc6b86dc26120d8363d Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Tue, 20 Jan 2026 03:17:49 +0000
 Subject: [PATCH] Guard tracker tick against null entities
 
----
- net/minecraft/server/level/ChunkMap.java | 10 ++++++++--
- 1 file changed, 8 insertions(+), 2 deletions(-)
 
 diff --git a/net/minecraft/server/level/ChunkMap.java b/net/minecraft/server/level/ChunkMap.java
-index ab88931..0f7fa0d 100644
+index eb352aa4296abc3ed4cf31c590bc0be66daf4de3..4c761e7073e816ece18631dd8c1b25f21985b5a9 100644
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
-@@ -1046,9 +1046,15 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+@@ -1003,9 +1003,15 @@ public class ChunkMap extends ChunkStorage implements ChunkHolder.PlayerProvider
          final ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup entityLookup = (ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup)((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.level).moonrise$getEntityLookup();;
  
          final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.world.entity.Entity> trackerEntities = entityLookup.trackerEntities;
@@ -29,6 +26,3 @@ index ab88931..0f7fa0d 100644
              final ChunkMap.TrackedEntity tracker = ((ca.spottedleaf.moonrise.patches.entity_tracker.EntityTrackerEntity)entity).moonrise$getTrackedEntity();
              if (tracker == null) {
                  continue;
--- 
-2.47.3
-

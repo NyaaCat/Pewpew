@@ -1,0 +1,62 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:04:13 +0000
+Subject: [PATCH] Add redstone thread-local guard test
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..fb8d0018ea980819bb5e5bd8f05ec77343e49731
+--- /dev/null
++++ b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+@@ -0,0 +1,50 @@
++package io.papermc.paper.pewpew;
++
++import java.util.concurrent.atomic.AtomicReference;
++import net.minecraft.world.level.block.RedStoneWireBlock;
++import net.minecraft.world.level.block.state.BlockBehaviour;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.AfterAll;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertFalse;
++
++@Normal
++class RedstoneWireThreadLocalTest {
++    private static final String THREAD_GUARD_PROPERTY = "pewpew.worldTickCoordinator.testing";
++    private static final String PREVIOUS_GUARD = System.getProperty(THREAD_GUARD_PROPERTY);
++
++    static {
++        System.setProperty(THREAD_GUARD_PROPERTY, "true");
++    }
++
++    @AfterAll
++    static void restoreThreadGuardProperty() {
++        if (PREVIOUS_GUARD == null) {
++            System.clearProperty(THREAD_GUARD_PROPERTY);
++        } else {
++            System.setProperty(THREAD_GUARD_PROPERTY, PREVIOUS_GUARD);
++        }
++    }
++
++    @Test
++    void shouldSignalIsThreadLocal() throws InterruptedException {
++        RedStoneWireBlock wire = new RedStoneWireBlock(BlockBehaviour.Properties.of());
++        wire.setShouldSignal(false);
++        AtomicReference<Boolean> initial = new AtomicReference<>();
++        AtomicReference<Boolean> after = new AtomicReference<>();
++
++        Thread thread = new Thread(() -> {
++            initial.set(wire.shouldSignal());
++            wire.setShouldSignal(true);
++            after.set(wire.shouldSignal());
++        });
++        thread.start();
++        thread.join();
++
++        assertEquals(Boolean.TRUE, initial.get());
++        assertEquals(Boolean.TRUE, after.get());
++        assertFalse(wire.shouldSignal());
++    }
++}

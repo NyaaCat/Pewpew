@@ -1,15 +1,11 @@
-From 1a455df0b3a72bf1f641519dad5fd66a7264094d Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Tue, 20 Jan 2026 04:01:23 +0000
 Subject: [PATCH] Pin world tick workers and prefer dedicated worlds
 
----
- .../paper/pewpew/WorldTickCoordinator.java    | 316 +++++++++++++++---
- .../WorldTickCoordinatorThreadPoolTest.java   |  36 ++
- 2 files changed, 303 insertions(+), 49 deletions(-)
 
 diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
-index ed89c7658..6562c6770 100644
+index ed89c76586de51cdc4f50597e974e1aae47b0bc8..6562c67703c7191326b5ec2462992f272d28e545 100644
 --- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 +++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 @@ -1,17 +1,19 @@
@@ -414,7 +410,7 @@ index ed89c7658..6562c6770 100644
 +    }
  }
 diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
-index db76c74d9..272151d00 100644
+index db76c74d9a5f7ad70741ba2a0199f0aaf63b159d..272151d00fe775ebab54bb06a08c471e0f4ba7d9 100644
 --- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
 +++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
 @@ -46,6 +46,42 @@ class WorldTickCoordinatorThreadPoolTest {
@@ -460,6 +456,3 @@ index db76c74d9..272151d00 100644
      @Test
      void dispatchRunsInlineWhenDisabled() throws Exception {
          final String previousEnabled = System.getProperty("pewpew.worldTickCoordinator");
--- 
-2.47.3
-

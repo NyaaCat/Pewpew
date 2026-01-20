@@ -1,0 +1,97 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:04:00 +0000
+Subject: [PATCH] Refine redstone shouldSignal guard
+
+
+diff --git a/io/papermc/paper/redstone/RedstoneWireTurbo.java b/io/papermc/paper/redstone/RedstoneWireTurbo.java
+index ff747a1ecdf3c888bca0d69de4f85dcd810b6139..86a6d532a03070db0682d1749de1b3715e73e026 100644
+--- a/io/papermc/paper/redstone/RedstoneWireTurbo.java
++++ b/io/papermc/paper/redstone/RedstoneWireTurbo.java
+@@ -829,14 +829,14 @@ public final class RedstoneWireTurbo {
+         j = getMaxCurrentStrength(upd, j);
+         int l = 0;
+ 
+-        wire.shouldSignal = false;
++        wire.setShouldSignal(false); // Pewpew - thread-local guard for parallel ticking
+         // Unfortunately, World.isBlockIndirectlyGettingPowered is complicated,
+         // and I'm not ready to try to replicate even more functionality from
+         // elsewhere in Minecraft into this accelerator.  So sadly, we must
+         // suffer the performance hit of this very expensive call.  If there
+         // is consistency to what this call returns, we may be able to cache it.
+         final int k = worldIn.getBestNeighborSignal(upd.self);
+-        wire.shouldSignal = true;
++        wire.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
+ 
+         // The variable 'k' holds the maximum redstone power value of any adjacent blocks.
+         // If 'k' has the highest level of all neighbors, then the power level of this
+diff --git a/net/minecraft/world/level/block/RedStoneWireBlock.java b/net/minecraft/world/level/block/RedStoneWireBlock.java
+index c55b0017d1fd6cd11bc1bc057608cf1802fcd208..9335d6dec52b9c133614fc8e5a3abac3e9bd0a39 100644
+--- a/net/minecraft/world/level/block/RedStoneWireBlock.java
++++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
+@@ -65,7 +65,28 @@ public class RedStoneWireBlock extends Block {
+     private final Function<BlockState, VoxelShape> shapes;
+     private final BlockState crossState;
+     private final RedstoneWireEvaluator evaluator = new DefaultRedstoneWireEvaluator(this);
+-    public boolean shouldSignal = true;
++    // Pewpew start - thread-local redstone signal guard for parallel ticking
++    private static final boolean THREAD_GUARD_ENABLED = Boolean.getBoolean("pewpew.worldTickCoordinator")
++        || Boolean.getBoolean("pewpew.worldTickCoordinator.testing");
++    private static final ThreadLocal<SignalContext> SIGNAL_CONTEXT = ThreadLocal.withInitial(SignalContext::new);
++    private boolean shouldSignal = true;
++
++    private static final class SignalContext {
++        private boolean shouldSignal = true;
++    }
++
++    public void setShouldSignal(boolean shouldSignal) {
++        if (THREAD_GUARD_ENABLED) {
++            SIGNAL_CONTEXT.get().shouldSignal = shouldSignal;
++        } else {
++            this.shouldSignal = shouldSignal;
++        }
++    }
++
++    public boolean shouldSignal() {
++        return THREAD_GUARD_ENABLED ? SIGNAL_CONTEXT.get().shouldSignal : this.shouldSignal;
++    }
++    // Pewpew end - thread-local redstone signal guard for parallel ticking
+ 
+     @Override
+     public MapCodec<RedStoneWireBlock> codec() {
+@@ -329,9 +350,9 @@ public class RedStoneWireBlock extends Block {
+     }
+ 
+     public int getBlockSignal(Level level, BlockPos pos) {
+-        this.shouldSignal = false;
++        this.setShouldSignal(false); // Pewpew - thread-local guard for parallel ticking
+         int bestNeighborSignal = level.getBestNeighborSignal(pos);
+-        this.shouldSignal = true;
++        this.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
+         return bestNeighborSignal;
+     }
+ 
+@@ -423,12 +444,12 @@ public class RedStoneWireBlock extends Block {
+ 
+     @Override
+     protected int getDirectSignal(BlockState blockState, BlockGetter blockAccess, BlockPos pos, Direction side) {
+-        return !this.shouldSignal ? 0 : blockState.getSignal(blockAccess, pos, side);
++        return !this.shouldSignal() ? 0 : blockState.getSignal(blockAccess, pos, side);
+     }
+ 
+     @Override
+     protected int getSignal(BlockState blockState, BlockGetter blockAccess, BlockPos pos, Direction side) {
+-        if (this.shouldSignal && side != Direction.DOWN) {
++        if (this.shouldSignal() && side != Direction.DOWN) {
+             int powerValue = blockState.getValue(POWER);
+             if (powerValue == 0) {
+                 return 0;
+@@ -460,7 +481,7 @@ public class RedStoneWireBlock extends Block {
+ 
+     @Override
+     protected boolean isSignalSource(BlockState state) {
+-        return this.shouldSignal;
++        return this.shouldSignal();
+     }
+ 
+     public static int getColorForPower(int power) {

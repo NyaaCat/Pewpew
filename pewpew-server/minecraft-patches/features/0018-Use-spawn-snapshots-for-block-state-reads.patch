@@ -1,15 +1,11 @@
-From c95d0be803a4451eb8bb7faea37e722c0e814ef6 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Mon, 19 Jan 2026 18:32:30 +0000
 Subject: [PATCH] Use spawn snapshots for block-state reads
 
----
- net/minecraft/world/level/NaturalSpawner.java | 25 +++++++++++++++++--
- .../world/level/chunk/PalettedContainer.java  |  1 +
- 2 files changed, 24 insertions(+), 2 deletions(-)
 
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 15b11bc..6078180 100644
+index 15b11bc9b4c9c7e4e674831eda43c9b20641a326..6078180a98c469941908db0d87e3b5b59a4ea92b 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
 @@ -285,7 +285,7 @@ public final class NaturalSpawner {
@@ -59,7 +55,7 @@ index 15b11bc..6078180 100644
          if (distance <= 576.0) {
              return false;
 diff --git a/net/minecraft/world/level/chunk/PalettedContainer.java b/net/minecraft/world/level/chunk/PalettedContainer.java
-index a251ba6..d70f29f 100644
+index a251ba67644cd02a0b00d7c8b0e2c64aa5e26291..d70f29f0eb2eecd9883d8737113f0e51d050ae0a 100644
 --- a/net/minecraft/world/level/chunk/PalettedContainer.java
 +++ b/net/minecraft/world/level/chunk/PalettedContainer.java
 @@ -153,6 +153,7 @@ public class PalettedContainer<T> implements PaletteResize<T>, PalettedContainer
@@ -70,6 +66,3 @@ index a251ba6..d70f29f 100644
      }
  
      // Paper start - Anti-Xray - Add preset values
--- 
-2.47.3
-

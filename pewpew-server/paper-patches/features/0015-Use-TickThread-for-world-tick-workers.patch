@@ -5,7 +5,7 @@ Subject: [PATCH] Use TickThread for world tick workers
 
 
 diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
-index 6440dc8d500d8d696baaa0794897f26aa9ae337f..660041dcc420c5506d8aabe80354d0debfca42c9 100644
+index 6e493f4c84d19fd75285ff2cd860be3de321a16e..ed89c76586de51cdc4f50597e974e1aae47b0bc8 100644
 --- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 +++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
 @@ -1,5 +1,6 @@
@@ -15,7 +15,7 @@ index 6440dc8d500d8d696baaa0794897f26aa9ae337f..660041dcc420c5506d8aabe80354d0de
  import java.util.Collections;
  import java.util.LinkedHashMap;
  import java.util.List;
-@@ -251,7 +252,7 @@ public final class WorldTickCoordinator {
+@@ -260,7 +261,7 @@ public final class WorldTickCoordinator {
              Math.max(1, Runtime.getRuntime().availableProcessors() - 1)
          ));
          final ThreadFactory factory = runnable -> {
