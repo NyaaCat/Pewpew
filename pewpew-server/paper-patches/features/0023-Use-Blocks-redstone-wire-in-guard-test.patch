@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:31:17 +0000
+Subject: [PATCH] Use Blocks redstone wire in guard test
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+index 488bc3876c0ad7d70c2a0507e580cc4e8fcc788c..76d4a4562d9ec1e715035ae0a10f3c9c10c22bd1 100644
+--- a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+@@ -1,11 +1,8 @@
+ package io.papermc.paper.pewpew;
+ 
+ import java.util.concurrent.atomic.AtomicReference;
+-import net.minecraft.core.registries.Registries;
+-import net.minecraft.resources.ResourceKey;
+-import net.minecraft.resources.ResourceLocation;
++import net.minecraft.world.level.block.Blocks;
+ import net.minecraft.world.level.block.RedStoneWireBlock;
+-import net.minecraft.world.level.block.state.BlockBehaviour;
+ import org.bukkit.support.environment.VanillaFeature;
+ import org.junit.jupiter.api.AfterAll;
+ import org.junit.jupiter.api.Test;
+@@ -33,24 +30,25 @@ class RedstoneWireThreadLocalTest {
+ 
+     @Test
+     void shouldSignalIsThreadLocal() throws InterruptedException {
+-        RedStoneWireBlock wire = new RedStoneWireBlock(
+-            BlockBehaviour.Properties.of()
+-                .setId(ResourceKey.create(Registries.BLOCK, ResourceLocation.fromNamespaceAndPath("pewpew", "redstone_wire_test")))
+-        );
+-        wire.setShouldSignal(false);
++        RedStoneWireBlock wire = (RedStoneWireBlock) Blocks.REDSTONE_WIRE;
+         AtomicReference<Boolean> initial = new AtomicReference<>();
+         AtomicReference<Boolean> after = new AtomicReference<>();
+ 
+-        Thread thread = new Thread(() -> {
+-            initial.set(wire.shouldSignal());
++        wire.setShouldSignal(false);
++        try {
++            Thread thread = new Thread(() -> {
++                initial.set(wire.shouldSignal());
++                wire.setShouldSignal(true);
++                after.set(wire.shouldSignal());
++            });
++            thread.start();
++            thread.join();
++
++            assertEquals(Boolean.TRUE, initial.get());
++            assertEquals(Boolean.TRUE, after.get());
++            assertFalse(wire.shouldSignal());
++        } finally {
+             wire.setShouldSignal(true);
+-            after.set(wire.shouldSignal());
+-        });
+-        thread.start();
+-        thread.join();
+-
+-        assertEquals(Boolean.TRUE, initial.get());
+-        assertEquals(Boolean.TRUE, after.get());
+-        assertFalse(wire.shouldSignal());
++        }
+     }
+ }
