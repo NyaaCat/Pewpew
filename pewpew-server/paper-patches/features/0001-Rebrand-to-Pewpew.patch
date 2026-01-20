@@ -1,11 +1,15 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Pewpew <pewpew@nyaa.cat>
-Date: Thu, 1 Jan 2026 00:00:00 +0000
+From a43c0635782957255036d6cba81a8f29ea97071d Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 03:55:52 +0000
 Subject: [PATCH] Rebrand to Pewpew
 
+---
+ src/main/java/com/destroystokyo/paper/Metrics.java      | 6 +++---
+ src/main/java/io/papermc/paper/ServerBuildInfoImpl.java | 4 ++--
+ 2 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/src/main/java/com/destroystokyo/paper/Metrics.java b/src/main/java/com/destroystokyo/paper/Metrics.java
-index 9f4d73fd321f6f0cd19fdd1b63068d2ea6c0816b..b488fbbf605efb5751de169cb8876156072f443a 100644
+index 6abc57669..46a4b7097 100644
 --- a/src/main/java/com/destroystokyo/paper/Metrics.java
 +++ b/src/main/java/com/destroystokyo/paper/Metrics.java
 @@ -593,7 +593,7 @@ public class Metrics {
@@ -31,41 +35,8 @@ index 9f4d73fd321f6f0cd19fdd1b63068d2ea6c0816b..b488fbbf605efb5751de169cb8876156
  
                  metrics.addCustomChart(new Metrics.DrilldownPie("java_version", () -> {
                      Map<String, Map<String, Integer>> map = new HashMap<>();
-diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-index 602d3ce2cd16405f35453ce12a207b70312a4a8a..2a32753759000c83ad223d9cf4d06dbe43f85cf1 100644
---- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-+++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-@@ -41,7 +41,7 @@ public class PaperVersionFetcher implements VersionFetcher {
-     private static final int DISTANCE_ERROR = -1;
-     private static final int DISTANCE_UNKNOWN = -2;
-     private static final String DOWNLOAD_PAGE = "https://papermc.io/downloads/paper";
--    private static final String REPOSITORY = "PaperMC/Paper";
-+    private static final String REPOSITORY = "NyaaCat/Pewpew"; // Pewpew - rebrand
-     private static final ServerBuildInfo BUILD_INFO = ServerBuildInfo.buildInfo();
-     private static final String USER_AGENT = BUILD_INFO.brandName() + "/" + BUILD_INFO.asString(VERSION_SIMPLE) + " (https://papermc.io)";
-     private static final Gson GSON = new Gson();
-@@ -194,14 +194,17 @@ public class PaperVersionFetcher implements VersionFetcher {
- 
-     private static int fetchDistanceFromSiteApi(final int jenkinsBuild) {
-         try {
--            final URL buildsUrl = URI.create("https://fill.papermc.io/v3/projects/paper/versions/" + PaperVersionFetcher.BUILD_INFO.minecraftVersionId() + "/builds").toURL();
-+            final URL buildsUrl = URI.create(
-+                "https://api.nyaacat.com/v1/projects/pewpew/versions/" + PaperVersionFetcher.BUILD_INFO.minecraftVersionId()
-+            ).toURL(); // Pewpew - update API endpoint
-             final HttpURLConnection connection = (HttpURLConnection) buildsUrl.openConnection();
-             connection.setConnectTimeout(5000);
-             connection.setReadTimeout(5000);
-             connection.setRequestProperty("User-Agent", PaperVersionFetcher.USER_AGENT);
-             connection.setRequestProperty("Accept", "application/json");
-             try (final BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
--                final JsonArray builds = GSON.fromJson(reader, JsonArray.class);
-+                final JsonObject json = GSON.fromJson(reader, JsonObject.class);
-+                final JsonArray builds = json.getAsJsonArray("builds");
-                 final int latest = StreamSupport.stream(builds.spliterator(), false)
-                     .mapToInt(build -> build.getAsJsonObject().get("id").getAsInt())
-                     .max()
 diff --git a/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java b/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
-index 74ffdc823e66fc5ec027c4b7c462382bcbfe2be2..7838c7bee847c0552e757bdd2e2f8d657988362c 100644
+index 74ffdc823..7838c7bee 100644
 --- a/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
 +++ b/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
 @@ -42,9 +42,9 @@ public record ServerBuildInfoImpl(
@@ -80,3 +51,6 @@ index 74ffdc823e66fc5ec027c4b7c462382bcbfe2be2..7838c7bee847c0552e757bdd2e2f8d65
              SharedConstants.getCurrentVersion().id(),
              SharedConstants.getCurrentVersion().name(),
              getManifestAttribute(manifest, ATTRIBUTE_BUILD_NUMBER)
+-- 
+2.47.3
+
