@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:24:40 +0000
+Subject: [PATCH] Fix redstone guard test block id
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+index fb8d0018ea980819bb5e5bd8f05ec77343e49731..4420ed6d076e152051c2a22d2fa498c7e53c6401 100644
+--- a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+@@ -1,6 +1,9 @@
+ package io.papermc.paper.pewpew;
+ 
+ import java.util.concurrent.atomic.AtomicReference;
++import net.minecraft.core.registries.Registries;
++import net.minecraft.resources.ResourceKey;
++import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.world.level.block.RedStoneWireBlock;
+ import net.minecraft.world.level.block.state.BlockBehaviour;
+ import org.bukkit.support.environment.Normal;
+@@ -30,7 +33,10 @@ class RedstoneWireThreadLocalTest {
+ 
+     @Test
+     void shouldSignalIsThreadLocal() throws InterruptedException {
+-        RedStoneWireBlock wire = new RedStoneWireBlock(BlockBehaviour.Properties.of());
++        RedStoneWireBlock wire = new RedStoneWireBlock(
++            BlockBehaviour.Properties.of()
++                .setId(ResourceKey.create(Registries.BLOCK, new ResourceLocation("pewpew", "redstone_wire_test")))
++        );
+         wire.setShouldSignal(false);
+         AtomicReference<Boolean> initial = new AtomicReference<>();
+         AtomicReference<Boolean> after = new AtomicReference<>();
