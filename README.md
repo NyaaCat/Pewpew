@@ -11,17 +11,13 @@ any behavior-changing optimizations are opt-in and documented.
 
 ## Patch workflow
 - Do not edit `pewpew-server/paper-patches` or `pewpew-server/minecraft-patches` directly.
-- Stable approach (work in `tmp/` with a fresh, patched Paper source):
-  1) Clone upstream Paper at the target version and run `./gradlew applyPatches`.
-  2) Create a branch and apply Pewpew changes on top of the patched sources, then commit locally.
-  3) Export patches with `git format-patch` (one commit per patch).
-  4) Copy patch files into the correct folder:
-     - Minecraft sources (`paper-server/src/minecraft/java`) -> `pewpew-server/minecraft-patches/features/`.
-     - Paper/Bukkit sources (`paper-server/src/main/java` or `paper-api/src/main/java`) -> `pewpew-server/paper-patches/features/`.
-     - New files -> `pewpew-server/minecraft-patches/sources/` or `pewpew-server/paper-patches/files/`.
-  5) Verify with `./gradlew :pewpew-server:applyAllServerPatches` and `./gradlew :pewpew-server:compileJava`.
+- Upstream tracking: each version branch pins `paperRef` in `gradle.properties` to a specific Paper `main` commit.
+- Stable approach (work in this repo using paperweight, like Paper/SparklyPaper):
+  1) Run `./gradlew applyAllPatches` (or `./gradlew applyPaperApiPatches` + `./gradlew :pewpew-server:applyAllServerPatches`) to regenerate `paper-api/` and `paper-server/`.
+  2) Make changes in `paper-api/` or `paper-server/` (Minecraft changes live under `paper-server/src/minecraft`).
+  3) Regenerate patches via the paperweight tasks (fixup or rebuild); do not hand-edit patch files.
+  4) Verify with `./gradlew :pewpew-server:applyAllServerPatches` and `./gradlew :pewpew-server:compileJava`.
 - Pewpew patches must apply after all Paper patches (`./gradlew :pewpew-server:applyAllServerPatches`).
-- Avoid rebuild tasks unless intentionally refreshing the full series; they rewrite patch files.
 - New files become file patches (`pewpew-server/paper-patches/files` or `pewpew-server/minecraft-patches/sources`).
 - `rebuildPaperServerFilePatches` may log a missing `src/main/resources/logo.png`; it is safe to ignore.
 
