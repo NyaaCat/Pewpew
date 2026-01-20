@@ -181,14 +181,23 @@
   - Observed `SpawnSnapshotLevelReader.getBiome` drop from ~0.67% to ~0.47% in the on profile.
 - Fixed spawn-biome cache key packing to use `BlockPos.asLong`, exported patch `pewpew-server/minecraft-patches/features/0020-Fix-quart-biome-cache-key-packing.patch`, and rebuilt the mojmap paperclip jar.
 - Implemented step 3 (use nearby spawn-range players list for nearest-player distance checks), exported patch `pewpew-server/minecraft-patches/features/0021-Use-nearby-players-list-for-spawn-distance-checks.patch`, and rebuilt the mojmap paperclip jar.
+- Re-profiled step 3 with 16 bots (keepalive bumped via `-Dpaper.playerconnection.keepalive=600`) and captured tree profiles at:
+  - `tmp/bench/prod-profile-20260119-195124-benchworld16-step3/off/profile-off-tree.html`
+  - `tmp/bench/prod-profile-20260119-195124-benchworld16-step3/on/profile-on-tree.html`
+  - Approximate scan deltas (tree max for `ServerEntityGetter.getNearestPlayer`): off 0.36% -> 0.20; on 0.29% -> 0.34 (noisy).
+- Reviewed step 3 spawn-distance change for vanilla behavior: uses spawn-range nearby-player list with spectator filtering and fallback to `ServerLevel#getNearestPlayer` when list unavailable; no hard-coded tuning added in production code.
+- Built production Mojmap paperclip jar via `./gradlew :pewpew-server:createMojmapPaperclipJar` (artifacts in `pewpew-server/build/libs/`).
+- Started redstone anomaly investigation: current patch set only touches redstone via `RedstoneWireTurbo` thread-local swap; next focus is verifying world-tick coordinator thread confinement and any cross-thread block updates that could desync redstone behavior.
+- Ran spawn snapshot cache A/B benchmarks (bench harness, 10 bots):
+  - Off run dir: `tmp/bench/runs/spawn-snapshot-off-20260119-211705`
+  - On run dir: `tmp/bench/runs/spawn-snapshot-on-20260119-214352`
+  - Pewpew avgMspt: 46.68 -> 46.58 (-0.22%), p95: 48.88 -> 48.01 (-1.8%), avgTps ~20.00 unchanged.
 
 ## Planned next steps
 1) Re-run per-world ticking A/B benchmarks (baseline vs world-tick-coordinator enabled) and capture logs showing feature flags + tick thread usage.
 2) Validate villager AI behavior under live gameplay and decide whether to default monster sync fallback to false.
-3) Re-profile step 3 with 16 bots to confirm nearest-player scan drops in spawn loops and record the delta.
-4) Run A/B benchmarks for spawn snapshot cache (on/off) and quantify spawn tick impact.
-5) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
-6) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
-7) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
-8) Stabilize 64-bot production profiling by reducing chunk/network load (e.g., lower view/simulation distance, slower joins, or split bot processes), then re-run off/on profiles.
-9) Draft and execute the next surgical optimization (block-entity ticking/hoppers) once spawn-path deltas are confirmed.
+3) Investigate remaining redstone anomalies under parallel ticking (identify suspect patches; confirm tick-thread invariants).
+4) Finish SparklyPaper 1.21.8→1.21.11 diff review to confirm whether any additional perf patches are worth porting.
+5) Decide how to handle cleanup of `tmp/cleanup/paper-1.21.8` (deletion blocked by policy).
+6) Stabilize 64-bot production profiling by reducing chunk/network load (e.g., lower view/simulation distance, slower joins, or split bot processes), then re-run off/on profiles.
+7) Draft and execute the next surgical optimization (block-entity ticking/hoppers) once spawn-path deltas are confirmed.
