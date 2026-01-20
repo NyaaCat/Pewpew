@@ -280,6 +280,7 @@ tasks.test {
         forkEvery = 1
         excludeTags("Slow")
     }
+    systemProperty("pewpew.worldTickCoordinator.testing", "true")
 
     // Configure mockito agent that is needed in newer java versions
     val provider = objects.newInstance<MockitoAgentProvider>()
