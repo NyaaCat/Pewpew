@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:28:46 +0000
+Subject: [PATCH] Use VanillaFeature env for redstone guard test
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+index 6c7d5c240e0ab7f102aab8d803aca8087613328c..488bc3876c0ad7d70c2a0507e580cc4e8fcc788c 100644
+--- a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+@@ -6,14 +6,14 @@ import net.minecraft.resources.ResourceKey;
+ import net.minecraft.resources.ResourceLocation;
+ import net.minecraft.world.level.block.RedStoneWireBlock;
+ import net.minecraft.world.level.block.state.BlockBehaviour;
+-import org.bukkit.support.environment.Normal;
++import org.bukkit.support.environment.VanillaFeature;
+ import org.junit.jupiter.api.AfterAll;
+ import org.junit.jupiter.api.Test;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+ import static org.junit.jupiter.api.Assertions.assertFalse;
+ 
+-@Normal
++@VanillaFeature
+ class RedstoneWireThreadLocalTest {
+     private static final String THREAD_GUARD_PROPERTY = "pewpew.worldTickCoordinator.testing";
+     private static final String PREVIOUS_GUARD = System.getProperty(THREAD_GUARD_PROPERTY);
