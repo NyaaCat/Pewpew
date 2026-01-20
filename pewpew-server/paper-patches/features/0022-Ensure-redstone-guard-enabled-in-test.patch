@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:12:36 +0000
+Subject: [PATCH] Ensure redstone guard enabled in test
+
+
+diff --git a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+index a695556072f13bf6963a5f6a662f6fe61b64f772..fb8d0018ea980819bb5e5bd8f05ec77343e49731 100644
+--- a/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/RedstoneWireThreadLocalTest.java
+@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicReference;
+ import net.minecraft.world.level.block.RedStoneWireBlock;
+ import net.minecraft.world.level.block.state.BlockBehaviour;
+ import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.AfterAll;
+ import org.junit.jupiter.api.Test;
+ 
+ import static org.junit.jupiter.api.Assertions.assertEquals;
+@@ -11,6 +12,22 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
+ 
+ @Normal
+ class RedstoneWireThreadLocalTest {
++    private static final String THREAD_GUARD_PROPERTY = "pewpew.worldTickCoordinator.testing";
++    private static final String PREVIOUS_GUARD = System.getProperty(THREAD_GUARD_PROPERTY);
++
++    static {
++        System.setProperty(THREAD_GUARD_PROPERTY, "true");
++    }
++
++    @AfterAll
++    static void restoreThreadGuardProperty() {
++        if (PREVIOUS_GUARD == null) {
++            System.clearProperty(THREAD_GUARD_PROPERTY);
++        } else {
++            System.setProperty(THREAD_GUARD_PROPERTY, PREVIOUS_GUARD);
++        }
++    }
++
+     @Test
+     void shouldSignalIsThreadLocal() throws InterruptedException {
+         RedStoneWireBlock wire = new RedStoneWireBlock(BlockBehaviour.Properties.of());

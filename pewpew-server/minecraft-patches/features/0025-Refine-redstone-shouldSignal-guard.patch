@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 06:12:21 +0000
+Subject: [PATCH] Refine redstone shouldSignal guard
+
+
+diff --git a/net/minecraft/world/level/block/RedStoneWireBlock.java b/net/minecraft/world/level/block/RedStoneWireBlock.java
+index f54579b6b6c24f2d0473b2c2372140a62196e280..a6e3056c67e0fba2fe27077c7420fb3e9bd6d317 100644
+--- a/net/minecraft/world/level/block/RedStoneWireBlock.java
++++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
+@@ -64,17 +64,28 @@ public class RedStoneWireBlock extends Block {
+     private final Function<BlockState, VoxelShape> shapes;
+     private final BlockState crossState;
+     private final RedstoneWireEvaluator evaluator = new DefaultRedstoneWireEvaluator(this);
+-    // Pewpew start - thread-local redstone signal for parallel ticking
+-    private final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> Boolean.TRUE);
++    // Pewpew start - thread-local redstone signal guard for parallel ticking
++    private static final boolean THREAD_GUARD_ENABLED = Boolean.getBoolean("pewpew.worldTickCoordinator")
++        || Boolean.getBoolean("pewpew.worldTickCoordinator.testing");
++    private static final ThreadLocal<SignalContext> SIGNAL_CONTEXT = ThreadLocal.withInitial(SignalContext::new);
++    private boolean shouldSignal = true;
++
++    private static final class SignalContext {
++        private boolean shouldSignal = true;
++    }
+ 
+     public void setShouldSignal(boolean shouldSignal) {
+-        this.shouldSignal.set(shouldSignal ? Boolean.TRUE : Boolean.FALSE);
++        if (THREAD_GUARD_ENABLED) {
++            SIGNAL_CONTEXT.get().shouldSignal = shouldSignal;
++        } else {
++            this.shouldSignal = shouldSignal;
++        }
+     }
+ 
+     public boolean shouldSignal() {
+-        return this.shouldSignal.get();
++        return THREAD_GUARD_ENABLED ? SIGNAL_CONTEXT.get().shouldSignal : this.shouldSignal;
+     }
+-    // Pewpew end - thread-local redstone signal for parallel ticking
++    // Pewpew end - thread-local redstone signal guard for parallel ticking
+ 
+     @Override
+     public MapCodec<RedStoneWireBlock> codec() {
