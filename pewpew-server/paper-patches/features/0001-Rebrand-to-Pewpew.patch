@@ -1,11 +1,15 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: Pewpew <pewpew@nyaa.cat>
-Date: Thu, 1 Jan 2026 00:00:00 +0000
+From 3f033a22fd1dda2dafc334d06b6e4c1f75c16ba0 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 20 Jan 2026 03:55:52 +0000
 Subject: [PATCH] Rebrand to Pewpew
 
+---
+ src/main/java/com/destroystokyo/paper/Metrics.java      | 6 +++---
+ src/main/java/io/papermc/paper/ServerBuildInfoImpl.java | 4 ++--
+ 2 files changed, 5 insertions(+), 5 deletions(-)
 
 diff --git a/src/main/java/com/destroystokyo/paper/Metrics.java b/src/main/java/com/destroystokyo/paper/Metrics.java
-index 6abc57669e87f7f98f3b76af3c0e50825fea6eb1..46a4b7097df7b57f409f4a53649be57436d8e1b3 100644
+index 9f4d73fd3..b488fbbf6 100644
 --- a/src/main/java/com/destroystokyo/paper/Metrics.java
 +++ b/src/main/java/com/destroystokyo/paper/Metrics.java
 @@ -593,7 +593,7 @@ public class Metrics {
@@ -31,30 +35,8 @@ index 6abc57669e87f7f98f3b76af3c0e50825fea6eb1..46a4b7097df7b57f409f4a53649be574
  
                  metrics.addCustomChart(new Metrics.DrilldownPie("java_version", () -> {
                      Map<String, Map<String, Integer>> map = new HashMap<>();
-diff --git a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-index d0554ed6631535815e5932930911e3fe1dee8710..7d8bf82e28c480b82923f7b0c005ac99302359f9 100644
---- a/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-+++ b/src/main/java/com/destroystokyo/paper/PaperVersionFetcher.java
-@@ -49,7 +49,7 @@ public class PaperVersionFetcher implements VersionFetcher {
-         if (build.buildNumber().isEmpty() && build.gitCommit().isEmpty()) {
-             updateMessage = text("You are running a development version without access to version information", color(0xFF5300));
-         } else {
--            updateMessage = getUpdateStatusMessage("PaperMC/Paper", build);
-+            updateMessage = getUpdateStatusMessage("NyaaCat/pewpew", build); // Pewpew - TODO: Update to your GitHub repo
-         }
-         final @Nullable Component history = this.getHistory();
- 
-@@ -86,7 +86,7 @@ public class PaperVersionFetcher implements VersionFetcher {
-     private static int fetchDistanceFromSiteApi(final ServerBuildInfo build, final int jenkinsBuild) {
-         try {
-             try (final BufferedReader reader = Resources.asCharSource(
--                URI.create("https://api.papermc.io/v2/projects/paper/versions/" + build.minecraftVersionId()).toURL(),
-+                URI.create("https://api.nyaacat.com/v1/projects/pewpew/versions/" + build.minecraftVersionId()).toURL(), // Pewpew - TODO: Update to correct API endpoint
-                 StandardCharsets.UTF_8
-             ).openBufferedStream()) {
-                 final JsonObject json = new Gson().fromJson(reader, JsonObject.class);
 diff --git a/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java b/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
-index 74ffdc823e66fc5ec027c4b7c462382bcbfe2be2..7838c7bee847c0552e757bdd2e2f8d657988362c 100644
+index 74ffdc823..7838c7bee 100644
 --- a/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
 +++ b/src/main/java/io/papermc/paper/ServerBuildInfoImpl.java
 @@ -42,9 +42,9 @@ public record ServerBuildInfoImpl(
@@ -69,3 +51,6 @@ index 74ffdc823e66fc5ec027c4b7c462382bcbfe2be2..7838c7bee847c0552e757bdd2e2f8d65
              SharedConstants.getCurrentVersion().id(),
              SharedConstants.getCurrentVersion().name(),
              getManifestAttribute(manifest, ATTRIBUTE_BUILD_NUMBER)
+-- 
+2.47.3
+
