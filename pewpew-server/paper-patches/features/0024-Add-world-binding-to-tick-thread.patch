@@ -1,0 +1,124 @@
+From 0fdd00cfe1477f265390cbf49dbec0867dc1a5fc Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Wed, 21 Jan 2026 15:33:53 +0000
+Subject: [PATCH] Add world binding to tick thread
+
+---
+ .../moonrise/common/util/TickThread.java      | 64 +++++++++++++++----
+ 1 file changed, 53 insertions(+), 11 deletions(-)
+
+diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
+index 69cdd304d..e335ff0b2 100644
+--- a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
++++ b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
+@@ -14,6 +14,29 @@ import java.util.concurrent.atomic.AtomicInteger;
+ public class TickThread extends Thread {
+ 
+     private static final Logger LOGGER = LoggerFactory.getLogger(TickThread.class);
++    private static final ThreadLocal<Level> CURRENT_WORLD = new ThreadLocal<>();
++
++    public static final class WorldBind implements AutoCloseable {
++        private final Level previous;
++        private boolean closed;
++
++        private WorldBind(final Level previous) {
++            this.previous = previous;
++        }
++
++        @Override
++        public void close() {
++            if (this.closed) {
++                return;
++            }
++            this.closed = true;
++            if (this.previous == null) {
++                CURRENT_WORLD.remove();
++            } else {
++                CURRENT_WORLD.set(this.previous);
++            }
++        }
++    }
+ 
+     private static String getThreadContext() {
+         return "thread=" + Thread.currentThread().getName();
+@@ -126,47 +149,66 @@ public class TickThread extends Thread {
+         return false;
+     }
+ 
++    public static WorldBind bindWorld(final Level world) {
++        final Level previous = CURRENT_WORLD.get();
++        if (world == null) {
++            CURRENT_WORLD.remove();
++        } else {
++            CURRENT_WORLD.set(world);
++        }
++        return new WorldBind(previous);
++    }
++
++    private static boolean isWorldCompatible(final Level world) {
++        if (world == null) {
++            return true;
++        }
++        final Level bound = CURRENT_WORLD.get();
++        return bound == null || bound == world;
++    }
++
+     public static boolean isTickThreadFor(final Level world, final BlockPos pos) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final BlockPos pos, final int blockRadius) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final ChunkPos pos) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final Vec3 pos) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final int chunkX, final int chunkZ) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final AABB aabb) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final double blockX, final double blockZ) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final Vec3 position, final Vec3 deltaMovement, final int buffer) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final int fromChunkX, final int fromChunkZ, final int toChunkX, final int toChunkZ) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Level world, final int chunkX, final int chunkZ, final int radius) {
+-        return isTickThread();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ 
+     public static boolean isTickThreadFor(final Entity entity) {
+-        return isTickThread();
++        final Level world = entity == null ? null : entity.level();
++        return isTickThread() && isWorldCompatible(world);
+     }
+ }
+-- 
+2.47.3
+
