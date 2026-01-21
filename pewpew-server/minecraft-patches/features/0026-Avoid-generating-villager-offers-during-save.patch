@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Wed, 21 Jan 2026 14:46:24 +0000
+Subject: [PATCH] Avoid generating villager offers during save
+
+
+diff --git a/net/minecraft/world/entity/npc/villager/AbstractVillager.java b/net/minecraft/world/entity/npc/villager/AbstractVillager.java
+index fa8f1ea38192f9ad0a961a53399f295d83af7721..faf4d794e6719870fbea14d7f0eb53041d9fcce7 100644
+--- a/net/minecraft/world/entity/npc/villager/AbstractVillager.java
++++ b/net/minecraft/world/entity/npc/villager/AbstractVillager.java
+@@ -186,8 +186,9 @@ public abstract class AbstractVillager extends AgeableMob implements InventoryCa
+     protected void addAdditionalSaveData(ValueOutput output) {
+         super.addAdditionalSaveData(output);
+         if (!this.level().isClientSide()) {
+-            MerchantOffers offers = this.getOffers();
+-            if (!offers.isEmpty()) {
++            // Avoid generating trades during save; that can trigger sync chunk loads while unloading.
++            MerchantOffers offers = this.offers;
++            if (offers != null && !offers.isEmpty()) {
+                 output.store("Offers", MerchantOffers.CODEC, offers);
+             }
+         }
