@@ -1,0 +1,90 @@
+From b84ad54f6c46d406245e093940c0d43ff867397d Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Wed, 21 Jan 2026 15:34:47 +0000
+Subject: [PATCH] Bind world tick tasks to tick thread
+
+---
+ net/minecraft/server/MinecraftServer.java | 65 ++++++++++++-----------
+ 1 file changed, 34 insertions(+), 31 deletions(-)
+
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index fa3d49f..6861929 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -1710,39 +1710,42 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             for (ServerLevel serverLevel : this.getAllLevels()) {
+                 final String worldKey = serverLevel.dimension().location().toString();
+                 worldTasks.put(worldKey, () -> {
+-                    ProfilerFiller worldProfiler = Profiler.get();
+-                    serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
+-                    serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
+-                    serverLevel.updateLagCompensationTick(); // Paper - lag compensation
+-                    net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
+-                    worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().location());
+-                    /* Drop global time updates
+-                    if (this.tickCount % 20 == 0) {
+-                        worldProfiler.push("timeSync");
+-                        this.synchronizeTime(serverLevel);
+-                        worldProfiler.pop();
+-                    }
+-                    // CraftBukkit end */
+-
+-                    io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(serverLevel.getWorld().getName()));
+-                    worldProfiler.push("tick");
++                    try (ca.spottedleaf.moonrise.common.util.TickThread.WorldBind ignored =
++                             ca.spottedleaf.moonrise.common.util.TickThread.bindWorld(serverLevel)) {
++                        ProfilerFiller worldProfiler = Profiler.get();
++                        serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
++                        serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
++                        serverLevel.updateLagCompensationTick(); // Paper - lag compensation
++                        net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
++                        worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().location());
++                        /* Drop global time updates
++                        if (this.tickCount % 20 == 0) {
++                            worldProfiler.push("timeSync");
++                            this.synchronizeTime(serverLevel);
++                            worldProfiler.pop();
++                        }
++                        // CraftBukkit end */
++
++                        io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(serverLevel.getWorld().getName()));
++                        worldProfiler.push("tick");
++
++                        try {
++                            long start = Util.getNanos(); // Pewpew - track per-world MSPT
++                            serverLevel.tick(hasTimeLeft);
++                            long elapsed = Util.getNanos() - start; // Pewpew - track per-world MSPT
++                            serverLevel.tickTimes5s.add(this.tickCount, elapsed);
++                            serverLevel.tickTimes10s.add(this.tickCount, elapsed);
++                            serverLevel.tickTimes1m.add(this.tickCount, elapsed);
++                        } catch (Throwable var7) {
++                            CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
++                            serverLevel.fillReportDetails(crashReport);
++                            throw new ReportedException(crashReport);
++                        }
+ 
+-                    try {
+-                        long start = Util.getNanos(); // Pewpew - track per-world MSPT
+-                        serverLevel.tick(hasTimeLeft);
+-                        long elapsed = Util.getNanos() - start; // Pewpew - track per-world MSPT
+-                        serverLevel.tickTimes5s.add(this.tickCount, elapsed);
+-                        serverLevel.tickTimes10s.add(this.tickCount, elapsed);
+-                        serverLevel.tickTimes1m.add(this.tickCount, elapsed);
+-                    } catch (Throwable var7) {
+-                        CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
+-                        serverLevel.fillReportDetails(crashReport);
+-                        throw new ReportedException(crashReport);
++                        worldProfiler.pop();
++                        worldProfiler.pop();
++                        serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
+                     }
+-
+-                    worldProfiler.pop();
+-                    worldProfiler.pop();
+-                    serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
+                 });
+             }
+             io.papermc.paper.pewpew.WorldTickCoordinator.TickBarrier barrier =
+-- 
+2.47.3
+
