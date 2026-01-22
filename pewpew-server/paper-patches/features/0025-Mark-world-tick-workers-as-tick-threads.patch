@@ -1,0 +1,114 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Thu, 22 Jan 2026 15:45:10 +0000
+Subject: [PATCH] Mark world tick workers as tick threads
+
+
+diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
+index e335ff0b295e949c1f3f5a15f5703dbbd1048caa..df2351acfe6060f405ede2f626e7d0043cdc780b 100644
+--- a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
++++ b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
+@@ -15,6 +15,7 @@ public class TickThread extends Thread {
+ 
+     private static final Logger LOGGER = LoggerFactory.getLogger(TickThread.class);
+     private static final ThreadLocal<Level> CURRENT_WORLD = new ThreadLocal<>();
++    private static final ThreadLocal<Boolean> MARKED_TICK_THREAD = new ThreadLocal<>();
+ 
+     public static final class WorldBind implements AutoCloseable {
+         private final Level previous;
+@@ -142,7 +143,19 @@ public class TickThread extends Thread {
+     }
+ 
+     public static boolean isTickThread() {
+-        return Thread.currentThread() instanceof TickThread;
++        return Thread.currentThread() instanceof TickThread || isMarkedTickThread();
++    }
++
++    public static void markTickThread() {
++        MARKED_TICK_THREAD.set(Boolean.TRUE);
++    }
++
++    public static void clearTickThreadMark() {
++        MARKED_TICK_THREAD.remove();
++    }
++
++    private static boolean isMarkedTickThread() {
++        return Boolean.TRUE.equals(MARKED_TICK_THREAD.get());
+     }
+ 
+     public static boolean isShutdownThread() {
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index 6562c67703c7191326b5ec2462992f272d28e545..5bcd5bfdd1cfc2824308f02891b04d9ad6c1f67a 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -674,17 +674,22 @@ public final class WorldTickCoordinator {
+ 
+         @Override
+         public void run() {
+-            while (this.running.get() || !this.queue.isEmpty()) {
+-                try {
+-                    final Runnable task = this.queue.poll(250L, TimeUnit.MILLISECONDS);
+-                    if (task != null) {
+-                        task.run();
+-                    }
+-                } catch (final InterruptedException ex) {
+-                    if (!this.running.get()) {
+-                        break;
++            TickThread.markTickThread();
++            try {
++                while (this.running.get() || !this.queue.isEmpty()) {
++                    try {
++                        final Runnable task = this.queue.poll(250L, TimeUnit.MILLISECONDS);
++                        if (task != null) {
++                            task.run();
++                        }
++                    } catch (final InterruptedException ex) {
++                        if (!this.running.get()) {
++                            break;
++                        }
+                     }
+                 }
++            } finally {
++                TickThread.clearTickThreadMark();
+             }
+         }
+     }
+diff --git a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+index 272151d00fe775ebab54bb06a08c471e0f4ba7d9..976b90e99f6c3f68f042f26d4c1d5086f2d8ab64 100644
+--- a/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/WorldTickCoordinatorThreadPoolTest.java
+@@ -1,5 +1,6 @@
+ package io.papermc.paper.pewpew;
+ 
++import ca.spottedleaf.moonrise.common.util.TickThread;
+ import java.util.LinkedHashMap;
+ import java.util.Map;
+ import java.util.concurrent.ConcurrentHashMap;
+@@ -26,9 +27,16 @@ class WorldTickCoordinatorThreadPoolTest {
+ 
+             final Map<String, Runnable> tasks = new LinkedHashMap<>();
+             final Map<String, String> threadNames = new ConcurrentHashMap<>();
++            final Map<String, Boolean> tickThreadFlags = new ConcurrentHashMap<>();
+             final String mainThread = Thread.currentThread().getName();
+-            tasks.put("world_one", () -> threadNames.put("world_one", Thread.currentThread().getName()));
+-            tasks.put("world_two", () -> threadNames.put("world_two", Thread.currentThread().getName()));
++            tasks.put("world_one", () -> {
++                threadNames.put("world_one", Thread.currentThread().getName());
++                tickThreadFlags.put("world_one", TickThread.isTickThread());
++            });
++            tasks.put("world_two", () -> {
++                threadNames.put("world_two", Thread.currentThread().getName());
++                tickThreadFlags.put("world_two", TickThread.isTickThread());
++            });
+ 
+             coordinator.dispatchWorldTicks(tasks);
+             coordinator.awaitIdle();
+@@ -38,6 +46,8 @@ class WorldTickCoordinatorThreadPoolTest {
+             assertNotEquals(mainThread, threadNames.get("world_two"));
+             assertTrue(threadNames.get("world_one").startsWith("Pewpew-Tick-"));
+             assertTrue(threadNames.get("world_two").startsWith("Pewpew-Tick-"));
++            assertTrue(Boolean.TRUE.equals(tickThreadFlags.get("world_one")));
++            assertTrue(Boolean.TRUE.equals(tickThreadFlags.get("world_two")));
+         } finally {
+             coordinator.shutdownForTesting();
+             restoreProperty("pewpew.worldTickCoordinator", previousEnabled);

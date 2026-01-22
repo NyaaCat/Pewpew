@@ -1,14 +1,11 @@
-From 0fdd00cfe1477f265390cbf49dbec0867dc1a5fc Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Wed, 21 Jan 2026 15:33:53 +0000
 Subject: [PATCH] Add world binding to tick thread
 
----
- .../moonrise/common/util/TickThread.java      | 64 +++++++++++++++----
- 1 file changed, 53 insertions(+), 11 deletions(-)
 
 diff --git a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
-index 69cdd304d..e335ff0b2 100644
+index 69cdd304d255d52c9b7dc9b6a33ffdb630b79abe..e335ff0b295e949c1f3f5a15f5703dbbd1048caa 100644
 --- a/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
 +++ b/src/main/java/ca/spottedleaf/moonrise/common/util/TickThread.java
 @@ -14,6 +14,29 @@ import java.util.concurrent.atomic.AtomicInteger;
@@ -119,6 +116,3 @@ index 69cdd304d..e335ff0b2 100644
 +        return isTickThread() && isWorldCompatible(world);
      }
  }
--- 
-2.47.3
-
