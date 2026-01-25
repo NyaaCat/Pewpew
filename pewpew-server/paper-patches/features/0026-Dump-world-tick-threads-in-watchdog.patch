@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Sun, 25 Jan 2026 11:03:47 +0000
+Subject: [PATCH] Dump world tick threads in watchdog
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index 5bcd5bfdd1cfc2824308f02891b04d9ad6c1f67a..e447c7d6a873229ca1b0dcc0e449a0e233a8fe27 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -59,6 +59,10 @@ public final class WorldTickCoordinator {
+         return Boolean.getBoolean(ENABLE_PROPERTY);
+     }
+ 
++    public static boolean isWorldTickThreadName(final String name) {
++        return name != null && name.startsWith(THREAD_NAME_PREFIX);
++    }
++
+     private static boolean isActive() {
+         return isEnabled() || Boolean.getBoolean(TESTING_PROPERTY);
+     }
+diff --git a/src/main/java/org/spigotmc/WatchdogThread.java b/src/main/java/org/spigotmc/WatchdogThread.java
+index c77748061f1c8bb2b0dc8dbd80f608d431752015..c47f08938d06c7a0060bf8849b533913f874cfca 100644
+--- a/src/main/java/org/spigotmc/WatchdogThread.java
++++ b/src/main/java/org/spigotmc/WatchdogThread.java
+@@ -2,9 +2,14 @@ package org.spigotmc;
+ 
+ import io.papermc.paper.FeatureHooks;
+ import io.papermc.paper.configuration.GlobalConfiguration;
++import io.papermc.paper.pewpew.WorldTickCoordinator;
+ import java.lang.management.ManagementFactory;
+ import java.lang.management.MonitorInfo;
+ import java.lang.management.ThreadInfo;
++import java.lang.management.ThreadMXBean;
++import java.util.ArrayList;
++import java.util.Comparator;
++import java.util.List;
+ import java.util.logging.Level;
+ import java.util.logging.Logger;
+ import net.minecraft.server.MinecraftServer;
+@@ -110,6 +115,7 @@ public class WatchdogThread extends ca.spottedleaf.moonrise.common.util.TickThre
+                 logger.log(Level.SEVERE, "Server thread dump (Look for plugins here before reporting to Paper!):"); // Paper
+                 FeatureHooks.dumpAllChunkLoadInfo(MinecraftServer.getServer(), isLongTimeout); // Paper - log detailed tick information
+                 WatchdogThread.dumpThread(ManagementFactory.getThreadMXBean().getThreadInfo(MinecraftServer.getServer().serverThread.threadId(), Integer.MAX_VALUE), logger);
++                WatchdogThread.dumpWorldTickThreads(logger);
+                 logger.log(Level.SEVERE, "------------------------------");
+ 
+                 // Paper start - Only print full dump on long timeouts
+@@ -156,6 +162,27 @@ public class WatchdogThread extends ca.spottedleaf.moonrise.common.util.TickThre
+         }
+     }
+ 
++    private static void dumpWorldTickThreads(Logger logger) {
++        ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
++        List<Thread> threads = new ArrayList<>();
++        for (Thread thread : Thread.getAllStackTraces().keySet()) {
++            if (WorldTickCoordinator.isWorldTickThreadName(thread.getName())) {
++                threads.add(thread);
++            }
++        }
++        if (threads.isEmpty()) {
++            return;
++        }
++        threads.sort(Comparator.comparing(Thread::getName).thenComparingLong(Thread::threadId));
++        logger.log(Level.SEVERE, "World tick coordinator thread dump:");
++        for (Thread thread : threads) {
++            ThreadInfo info = threadBean.getThreadInfo(thread.threadId(), Integer.MAX_VALUE);
++            if (info != null) {
++                WatchdogThread.dumpThread(info, logger);
++            }
++        }
++    }
++
+     private static void dumpThread(ThreadInfo thread, Logger logger) {
+         logger.log(Level.SEVERE, "------------------------------");
+ 
