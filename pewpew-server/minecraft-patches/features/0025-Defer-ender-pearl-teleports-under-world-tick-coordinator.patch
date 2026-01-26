@@ -1,17 +1,17 @@
-From 4533732f6b24bb995223068b4673c806592e213a Mon Sep 17 00:00:00 2001
+From 0bc9ace716513e762634dec25c3e0fd1ce55cf21 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
-Date: Mon, 26 Jan 2026 15:09:12 +0000
+Date: Mon, 26 Jan 2026 15:30:10 +0000
 Subject: [PATCH] Defer ender pearl teleports under world tick coordinator
 
 ---
- .../ThrownEnderpearl.java                     | 87 ++++++++++++-------
- 1 file changed, 55 insertions(+), 32 deletions(-)
+ .../entity/projectile/ThrownEnderpearl.java   | 88 ++++++++++++-------
+ 1 file changed, 56 insertions(+), 32 deletions(-)
 
-diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
-index 66df6c6..d7ab01a 100644
---- a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
-+++ b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
-@@ -99,6 +99,8 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+diff --git a/net/minecraft/world/entity/projectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/ThrownEnderpearl.java
+index 5aa63c9..1088350 100644
+--- a/net/minecraft/world/entity/projectile/ThrownEnderpearl.java
++++ b/net/minecraft/world/entity/projectile/ThrownEnderpearl.java
+@@ -116,6 +116,8 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
          if (this.level() instanceof ServerLevel serverLevel && !this.isRemoved()) {
              Entity owner = this.getOwner();
              if (owner != null && isAllowedToTeleportOwner(owner, serverLevel)) {
@@ -20,7 +20,7 @@ index 66df6c6..d7ab01a 100644
                  Vec3 vec3 = this.oldPosition();
                  if (owner instanceof ServerPlayer serverPlayer) {
                      if (serverPlayer.connection.isAcceptingMessages()) {
-@@ -106,48 +108,69 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+@@ -123,48 +125,70 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
                          // Store pre teleportation position as the teleport has been moved up.
                          final double preTeleportX = serverPlayer.getX(), preTeleportY = serverPlayer.getY(), preTeleportZ = serverPlayer.getZ();
                          final float preTeleportYRot = serverPlayer.getYRot(), preTeleportXRot = serverPlayer.getXRot();
@@ -30,12 +30,13 @@ index 66df6c6..d7ab01a 100644
 -                            return;
 -                        }
 -                        // CraftBukkit end
--                        if (this.random.nextFloat() < 0.05F && serverLevel.isSpawningMonsters()) {
+-                        if (this.random.nextFloat() < 0.05F && serverLevel.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING)) {
 -                            Endermite endermite = EntityType.ENDERMITE.create(serverLevel, EntitySpawnReason.TRIGGERED);
 -                            if (endermite != null) {
 -                                endermite.snapTo(preTeleportX, preTeleportY, preTeleportZ, preTeleportYRot, preTeleportXRot); // Paper - spawn endermite at pre teleport position as teleport has been moved up
--                                serverLevel.addFreshEntity(endermite, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.ENDER_PEARL); // Paper - add reason
-+                        final boolean spawnEndermite = this.random.nextFloat() < 0.05F && serverLevel.isSpawningMonsters();
+-                                serverLevel.addFreshEntity(endermite, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.ENDER_PEARL);
++                        final boolean spawnEndermite = this.random.nextFloat() < 0.05F
++                            && serverLevel.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING);
 +                        final boolean portalCooldown = this.isOnPortalCooldown();
 +                        final Runnable teleportTask = () -> {
 +                            if (!isAllowedToTeleportOwner(serverPlayer, serverLevel) || !serverPlayer.connection.isAcceptingMessages()) {
@@ -50,7 +51,7 @@ index 66df6c6..d7ab01a 100644
 +                                Endermite endermite = EntityType.ENDERMITE.create(serverLevel, EntitySpawnReason.TRIGGERED);
 +                                if (endermite != null) {
 +                                    endermite.snapTo(preTeleportX, preTeleportY, preTeleportZ, preTeleportYRot, preTeleportXRot); // Paper - spawn endermite at pre teleport position as teleport has been moved up
-+                                    serverLevel.addFreshEntity(endermite, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.ENDER_PEARL); // Paper - add reason
++                                    serverLevel.addFreshEntity(endermite, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.ENDER_PEARL);
 +                                }
                              }
 -                        }
