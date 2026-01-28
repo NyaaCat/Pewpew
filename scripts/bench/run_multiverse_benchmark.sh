@@ -10,6 +10,8 @@ PAPER_REF="$(grep '^paperRef=' "$ROOT_DIR/gradle.properties" | cut -d= -f2)"
 PEWPEW_VERSION="$(grep '^version=' "$ROOT_DIR/gradle.properties" | cut -d= -f2)"
 BENCH_PLUGIN_REPO="${BENCH_PLUGIN_REPO:-/home/phoenix/works/pewpew-bench-plugin}"
 MULTIVERSE_JAR_URL="${MULTIVERSE_JAR_URL:-https://github.com/Multiverse/Multiverse-Core/releases/download/5.5.0/multiverse-core-5.5.0.jar}"
+NODE_BIN="${BENCH_NODE_BIN:-node}"
+NPM_BIN="${BENCH_NPM_BIN:-npm}"
 
 SEED="${BENCH_SEED:-424242}"
 WORLD_NAMES=("world" "world2")
@@ -43,11 +45,20 @@ BENCH_PROFILE_LOG_PATTERN="${BENCH_PROFILE_LOG_PATTERN:-Villages and entities re
 BENCH_THREAD_SNAPSHOT="${BENCH_THREAD_SNAPSHOT:-0}"
 BENCH_THREAD_SNAPSHOT_DELAY="${BENCH_THREAD_SNAPSHOT_DELAY:-10}"
 BENCH_THREAD_SNAPSHOT_PATTERN="${BENCH_THREAD_SNAPSHOT_PATTERN:-Pewpew-(Async|Tick)-}"
+BENCH_DATAPACK_DIR="${BENCH_DATAPACK_DIR:-}"
+BENCH_COMPARE_DATAPACK="${BENCH_COMPARE_DATAPACK:-0}"
+BENCH_DATAPACK_ON_DIR="${BENCH_DATAPACK_ON_DIR:-$BENCH_DATAPACK_DIR}"
+BENCH_DATAPACK_OFF_DIR="${BENCH_DATAPACK_OFF_DIR:-}"
+BENCH_DATAPACK_FIX_ITEM_TAGS="${BENCH_DATAPACK_FIX_ITEM_TAGS:-1}"
+BENCH_RELOAD_TIMEOUT="${BENCH_RELOAD_TIMEOUT:-120}"
+BENCH_RELOAD_SETTLE_SECONDS="${BENCH_RELOAD_SETTLE_SECONDS:-5}"
 
 RUN_ID="${BENCH_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
 RUN_ROOT="$ROOT_DIR/tmp/bench/runs/$RUN_ID-multiworld"
 RUN_BASELINE_DIR="$RUN_ROOT/baseline"
 RUN_PEWPEW_DIR="$RUN_ROOT/pewpew"
+RUN_DATAPACK_OFF_DIR="$RUN_ROOT/datapack-off"
+RUN_DATAPACK_ON_DIR="$RUN_ROOT/datapack-on"
 REPORT_DIR="$ROOT_DIR/docs/pewpew/findings"
 BENCH_PROFILE_OUTPUT_DIR="${BENCH_PROFILE_OUTPUT_DIR:-$REPORT_DIR/profiles}"
 BASELINE_SUMMARY_OUT="$REPORT_DIR/multiverse-bench-summary-baseline.json"
@@ -55,6 +66,10 @@ BASELINE_SUMMARY_IN="${BENCH_BASELINE_SUMMARY:-$BASELINE_SUMMARY_OUT}"
 PEWPEW_SUMMARY_OUT="$REPORT_DIR/multiverse-bench-summary.json"
 BASELINE_REPORT_OUT="$REPORT_DIR/multiverse-bench-report-baseline.md"
 PEWPEW_REPORT_OUT="$REPORT_DIR/multiverse-bench-report.md"
+DATAPACK_OFF_SUMMARY_OUT="${BENCH_DATAPACK_OFF_SUMMARY_OUT:-$REPORT_DIR/multiverse-bench-summary-datapack-off.json}"
+DATAPACK_ON_SUMMARY_OUT="${BENCH_DATAPACK_ON_SUMMARY_OUT:-$REPORT_DIR/multiverse-bench-summary-datapack-on.json}"
+DATAPACK_OFF_REPORT_OUT="${BENCH_DATAPACK_OFF_REPORT_OUT:-$REPORT_DIR/multiverse-bench-report-datapack-off.md}"
+DATAPACK_ON_REPORT_OUT="${BENCH_DATAPACK_ON_REPORT_OUT:-$REPORT_DIR/multiverse-bench-report-datapack-on.md}"
 PEWPEW_JAVA_OPTS="${BENCH_PEWPEW_JAVA_OPTS:--Dpewpew.asyncPathfinding=true -Dpewpew.asyncSensors=true}"
 
 PEWPEW_FEATURE_ASYNC_PATHFINDING="${BENCH_PEWPEW_FEATURE_ASYNC_PATHFINDING:-true}"
@@ -189,6 +204,48 @@ function should_profile() {
             return 1
             ;;
     esac
+}
+
+function log_line_count() {
+    if [ ! -f "$1" ]; then
+        echo 0
+        return
+    fi
+    wc -l < "$1" | tr -d ' '
+}
+
+function wait_for_log_line_since() {
+    local log_file="$1"
+    local pattern="$2"
+    local start_line="$3"
+    local timeout_seconds="$4"
+    local elapsed=0
+    local start_from=$((start_line + 1))
+    until tail -n +"$start_from" "$log_file" 2>/dev/null | grep -Fq "$pattern"; do
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ "$elapsed" -ge "$timeout_seconds" ]; then
+            echo "Timeout waiting for log line: $pattern"
+            return 1
+        fi
+    done
+}
+
+function wait_for_log_regex_since() {
+    local log_file="$1"
+    local pattern="$2"
+    local start_line="$3"
+    local timeout_seconds="$4"
+    local elapsed=0
+    local start_from=$((start_line + 1))
+    until tail -n +"$start_from" "$log_file" 2>/dev/null | grep -Eq "$pattern"; do
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ "$elapsed" -ge "$timeout_seconds" ]; then
+            echo "Timeout waiting for log regex: $pattern"
+            return 1
+        fi
+    done
 }
 
 function wait_for_log_line() {
@@ -410,6 +467,39 @@ EOF
     echo "eula=true" > "$out_dir/eula.txt"
 }
 
+function fix_datapack_item_tags() {
+    local datapack_dir="$1"
+    if [ "$BENCH_DATAPACK_FIX_ITEM_TAGS" != "1" ]; then
+        return
+    fi
+    if [ ! -d "$datapack_dir/data" ]; then
+        return
+    fi
+    while IFS= read -r -d '' item_dir; do
+        local items_dir="${item_dir%/item}/items"
+        mkdir -p "$items_dir"
+        cp -a -n "$item_dir"/. "$items_dir"/
+    done < <(find "$datapack_dir/data" -type d -path "*/tags/item" -print0)
+}
+
+function install_datapack() {
+    local world_dir="$1"
+    local datapack_dir="$2"
+    if [ -z "$datapack_dir" ]; then
+        return
+    fi
+    if [ ! -d "$datapack_dir" ]; then
+        echo "Datapack dir not found: $datapack_dir"
+        exit 1
+    fi
+    local pack_name
+    pack_name="$(basename "$datapack_dir")"
+    mkdir -p "$world_dir/datapacks"
+    rm -rf "$world_dir/datapacks/$pack_name"
+    cp -a "$datapack_dir" "$world_dir/datapacks/$pack_name"
+    fix_datapack_item_tags "$world_dir/datapacks/$pack_name"
+}
+
 function prepare_run_dir() {
     local out_dir="$1"
     local plugin_jar="$2"
@@ -436,6 +526,31 @@ function wait_for_ready() {
     done
 }
 
+function reload_server() {
+    local log_file="$1"
+    local start_line
+    start_line=$(log_line_count "$log_file")
+    printf "reload\n" >&3
+    wait_for_log_line_since "$log_file" "Reloading!" "$start_line" "$BENCH_RELOAD_TIMEOUT"
+    wait_for_log_regex_since "$log_file" "Loaded [0-9]+ recipes" "$start_line" "$BENCH_RELOAD_TIMEOUT"
+    wait_for_log_regex_since "$log_file" "Loaded [0-9]+ advancements" "$start_line" "$BENCH_RELOAD_TIMEOUT"
+    sleep "$BENCH_RELOAD_SETTLE_SECONDS"
+}
+
+function wait_for_world_dir() {
+    local world_dir="$1"
+    local timeout_seconds=120
+    local elapsed=0
+    until [ -d "$world_dir" ]; do
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if [ "$elapsed" -ge "$timeout_seconds" ]; then
+            echo "Timeout waiting for world dir: $world_dir"
+            return 1
+        fi
+    done
+}
+
 function wait_for_marker() {
     local marker_file="$1"
     local timeout_seconds=600
@@ -451,13 +566,17 @@ function wait_for_marker() {
 }
 
 function ensure_bots_deps() {
-    if ! command -v node >/dev/null 2>&1; then
-        echo "node is required for mineflayer bots."
+    if ! command -v "$NODE_BIN" >/dev/null 2>&1; then
+        echo "$NODE_BIN is required for mineflayer bots."
+        exit 1
+    fi
+    if ! command -v "$NPM_BIN" >/dev/null 2>&1; then
+        echo "$NPM_BIN is required for mineflayer bots."
         exit 1
     fi
     pushd "$ROOT_DIR/scripts/bench" >/dev/null
     if [ ! -d "node_modules" ]; then
-        npm install
+        "$NPM_BIN" install
     fi
     popd >/dev/null
 }
@@ -469,6 +588,7 @@ function run_server() {
     local result_out="$4"
     local java_opts="$5"
     local profile_label="$6"
+    local datapack_dir="$7"
 
     local fifo="$run_dir/console.in"
     rm -f "$fifo"
@@ -493,13 +613,23 @@ function run_server() {
         echo "Failed to resolve server Java PID for $run_dir"
     fi
 
+    if [ -n "$datapack_dir" ]; then
+        wait_for_world_dir "$run_dir/${WORLD_NAMES[0]}"
+        install_datapack "$run_dir/${WORLD_NAMES[0]}" "$datapack_dir"
+    fi
+
     echo "Creating extra world via Multiverse"
     printf "mv create ${WORLD_NAMES[1]} normal -s %s\n" "$SEED" >&3
     printf "mv load ${WORLD_NAMES[1]}\n" >&3
+    if [ -n "$datapack_dir" ]; then
+        wait_for_world_dir "$run_dir/${WORLD_NAMES[1]}"
+        install_datapack "$run_dir/${WORLD_NAMES[1]}" "$datapack_dir"
+        reload_server "$run_dir/server.log"
+    fi
     wait_for_marker "$run_dir/plugins/PewpewBench/multiworld-ready.txt"
 
     echo "Spawning $BOT_COUNT bots for $RUN_SECONDS seconds"
-    node "$ROOT_DIR/scripts/bench/bots.js" --count "$BOT_COUNT" --duration "$RUN_SECONDS" >/dev/null 2>&1 &
+    "$NODE_BIN" "$ROOT_DIR/scripts/bench/bots.js" --count "$BOT_COUNT" --duration "$RUN_SECONDS" > "$run_dir/bots.log" 2>&1 &
     local bot_pid=$!
     if [ "$BENCH_THREAD_SNAPSHOT" = "1" ]; then
         sleep "$BENCH_THREAD_SNAPSHOT_DELAY"
@@ -557,56 +687,79 @@ function cleanup_run_root() {
 
 trap cleanup_run_root EXIT
 
-ensure_baseline_repo
-ensure_patches_applied "$BASELINE_REPO"
-ensure_pewpew_api_published
-build_bench_plugin
-ensure_bots_deps
+function write_report() {
+    local summary="$1"
+    local output="$2"
+    python3 "$ROOT_DIR/scripts/bench/multiverse_report.py" \
+        --summary "$summary" \
+        --output "$output" \
+        --worlds "${WORLD_NAMES[*]}" \
+        --players-per-world "$PLAYERS_PER_WORLD" \
+        --villagers-per-player "$VILLAGERS_PER_PLAYER" \
+        --warmup-ticks "$WARMUP_TICKS" \
+        --sample-ticks "$SAMPLE_TICKS" \
+        --sample-interval "$SAMPLE_INTERVAL_TICKS" \
+        --seed "$SEED" \
+        --duration-seconds "$RUN_SECONDS"
+}
 
-mkdir -p "$RUN_ROOT"
-mkdir -p "$REPORT_DIR"
+function prepare_common_bench() {
+    ensure_pewpew_api_published
+    build_bench_plugin
+    ensure_bots_deps
+    mkdir -p "$RUN_ROOT"
+    mkdir -p "$REPORT_DIR"
+    PLUGIN_JAR="$(plugin_jar_path)"
+}
 
-PLUGIN_JAR="$(plugin_jar_path)"
-prepare_run_dir "$RUN_BASELINE_DIR" "$PLUGIN_JAR"
-prepare_run_dir "$RUN_PEWPEW_DIR" "$PLUGIN_JAR"
+function run_default_bench() {
+    ensure_baseline_repo
+    ensure_patches_applied "$BASELINE_REPO"
+    prepare_common_bench
 
-if [ "${BENCH_SKIP_BASELINE:-}" = "1" ]; then
-    if [ ! -f "$BASELINE_SUMMARY_IN" ]; then
-        echo "Baseline summary not found: $BASELINE_SUMMARY_IN"
+    prepare_run_dir "$RUN_BASELINE_DIR" "$PLUGIN_JAR"
+    prepare_run_dir "$RUN_PEWPEW_DIR" "$PLUGIN_JAR"
+
+    if [ "${BENCH_SKIP_BASELINE:-}" = "1" ]; then
+        if [ ! -f "$BASELINE_SUMMARY_IN" ]; then
+            echo "Baseline summary not found: $BASELINE_SUMMARY_IN"
+            exit 1
+        fi
+        BASELINE_SUMMARY_IN_REAL="$(readlink -f "$BASELINE_SUMMARY_IN")"
+        BASELINE_SUMMARY_OUT_REAL="$(readlink -f "$BASELINE_SUMMARY_OUT" 2>/dev/null || true)"
+        if [ "$BASELINE_SUMMARY_IN_REAL" != "$BASELINE_SUMMARY_OUT_REAL" ]; then
+            cp "$BASELINE_SUMMARY_IN" "$BASELINE_SUMMARY_OUT"
+        fi
+    else
+        run_server "$BASELINE_REPO" ":paper-server:runDevServer" "$RUN_BASELINE_DIR" "$BASELINE_SUMMARY_OUT" "" "baseline" "$BENCH_DATAPACK_DIR"
+    fi
+    run_server "$ROOT_DIR" ":pewpew-server:runDevServer" "$RUN_PEWPEW_DIR" "$PEWPEW_SUMMARY_OUT" "$PEWPEW_JAVA_OPTS" "pewpew" "$BENCH_DATAPACK_DIR"
+
+    write_report "$BASELINE_SUMMARY_OUT" "$BASELINE_REPORT_OUT"
+    write_report "$PEWPEW_SUMMARY_OUT" "$PEWPEW_REPORT_OUT"
+    echo "Multiworld bench reports written to $BASELINE_REPORT_OUT and $PEWPEW_REPORT_OUT"
+}
+
+function run_datapack_compare() {
+    if [ -z "$BENCH_DATAPACK_ON_DIR" ]; then
+        echo "BENCH_DATAPACK_ON_DIR must be set for datapack comparison."
         exit 1
     fi
-    BASELINE_SUMMARY_IN_REAL="$(readlink -f "$BASELINE_SUMMARY_IN")"
-    BASELINE_SUMMARY_OUT_REAL="$(readlink -f "$BASELINE_SUMMARY_OUT" 2>/dev/null || true)"
-    if [ "$BASELINE_SUMMARY_IN_REAL" != "$BASELINE_SUMMARY_OUT_REAL" ]; then
-        cp "$BASELINE_SUMMARY_IN" "$BASELINE_SUMMARY_OUT"
-    fi
+    prepare_common_bench
+
+    prepare_run_dir "$RUN_DATAPACK_OFF_DIR" "$PLUGIN_JAR"
+    prepare_run_dir "$RUN_DATAPACK_ON_DIR" "$PLUGIN_JAR"
+
+    run_server "$ROOT_DIR" ":pewpew-server:runDevServer" "$RUN_DATAPACK_OFF_DIR" "$DATAPACK_OFF_SUMMARY_OUT" "$PEWPEW_JAVA_OPTS" "datapack-off" "$BENCH_DATAPACK_OFF_DIR"
+    run_server "$ROOT_DIR" ":pewpew-server:runDevServer" "$RUN_DATAPACK_ON_DIR" "$DATAPACK_ON_SUMMARY_OUT" "$PEWPEW_JAVA_OPTS" "datapack-on" "$BENCH_DATAPACK_ON_DIR"
+
+    write_report "$DATAPACK_OFF_SUMMARY_OUT" "$DATAPACK_OFF_REPORT_OUT"
+    write_report "$DATAPACK_ON_SUMMARY_OUT" "$DATAPACK_ON_REPORT_OUT"
+    echo "Multiworld bench reports written to $DATAPACK_OFF_REPORT_OUT and $DATAPACK_ON_REPORT_OUT"
+}
+
+if [ "$BENCH_COMPARE_DATAPACK" = "1" ]; then
+    run_datapack_compare
 else
-    run_server "$BASELINE_REPO" ":paper-server:runDevServer" "$RUN_BASELINE_DIR" "$BASELINE_SUMMARY_OUT" "" "baseline"
+    run_default_bench
 fi
-run_server "$ROOT_DIR" ":pewpew-server:runDevServer" "$RUN_PEWPEW_DIR" "$PEWPEW_SUMMARY_OUT" "$PEWPEW_JAVA_OPTS" "pewpew"
-
-python3 "$ROOT_DIR/scripts/bench/multiverse_report.py" \
-    --summary "$BASELINE_SUMMARY_OUT" \
-    --output "$BASELINE_REPORT_OUT" \
-    --worlds "${WORLD_NAMES[*]}" \
-    --players-per-world "$PLAYERS_PER_WORLD" \
-    --villagers-per-player "$VILLAGERS_PER_PLAYER" \
-    --warmup-ticks "$WARMUP_TICKS" \
-    --sample-ticks "$SAMPLE_TICKS" \
-    --sample-interval "$SAMPLE_INTERVAL_TICKS" \
-    --seed "$SEED" \
-    --duration-seconds "$RUN_SECONDS"
-
-python3 "$ROOT_DIR/scripts/bench/multiverse_report.py" \
-    --summary "$PEWPEW_SUMMARY_OUT" \
-    --output "$PEWPEW_REPORT_OUT" \
-    --worlds "${WORLD_NAMES[*]}" \
-    --players-per-world "$PLAYERS_PER_WORLD" \
-    --villagers-per-player "$VILLAGERS_PER_PLAYER" \
-    --warmup-ticks "$WARMUP_TICKS" \
-    --sample-ticks "$SAMPLE_TICKS" \
-    --sample-interval "$SAMPLE_INTERVAL_TICKS" \
-    --seed "$SEED" \
-    --duration-seconds "$RUN_SECONDS"
-
-echo "Multiworld bench reports written to $BASELINE_REPORT_OUT and $PEWPEW_REPORT_OUT"

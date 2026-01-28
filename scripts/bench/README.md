@@ -22,6 +22,12 @@ Environment overrides:
 - `BENCH_SKIP_PEWPEW_API_PUBLISH=1` (skip publishing `paper-api` to Maven local)
 - `BENCH_SKIP_BASELINE=1` (skip baseline run if a baseline summary exists)
 - `BENCH_BASELINE_SUMMARY` (path to an existing baseline summary when skipping baseline)
+- `BENCH_NODE_BIN`, `BENCH_NPM_BIN` (override Node/npm binaries for mineflayer)
+- `BENCH_DATAPACK_DIR` (install a datapack into each world for both runs)
+- `BENCH_COMPARE_DATAPACK=1` (compare datapack off/on using Pewpew only)
+- `BENCH_DATAPACK_ON_DIR`, `BENCH_DATAPACK_OFF_DIR` (per-run datapack dirs for compare mode)
+- `BENCH_DATAPACK_FIX_ITEM_TAGS=1` (copy `tags/item` to `tags/items` after install)
+- `BENCH_RELOAD_TIMEOUT`, `BENCH_RELOAD_SETTLE_SECONDS` (reload wait/settle timing)
 - `BENCH_SEED`, `BENCH_CELLS`, `BENCH_BOT_COUNT`
 - `BENCH_VILLAGERS_PER_CELL`, `BENCH_HOSTILES_PER_CELL`
 - `BENCH_WARMUP_TICKS`, `BENCH_SAMPLE_TICKS`, `BENCH_PHASE_TICKS`
@@ -77,3 +83,7 @@ Outputs:
 - `docs/pewpew/findings/perf-bench-report.md`
 - `docs/pewpew/findings/multiverse-bench-summary.json`
 - `docs/pewpew/findings/multiverse-bench-report.md`
+- `docs/pewpew/findings/multiverse-bench-summary-datapack-off.json`
+- `docs/pewpew/findings/multiverse-bench-summary-datapack-on.json`
+- `docs/pewpew/findings/multiverse-bench-report-datapack-off.md`
+- `docs/pewpew/findings/multiverse-bench-report-datapack-on.md`

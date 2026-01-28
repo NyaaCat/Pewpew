@@ -115,18 +115,18 @@ index 558a369cb73192fe6ff9dc50806e799f26b39edb..84ff4b1ad7ff47e69f28f98e66625ba2
  
          private void recordWait() {
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index da49c8005592a154946750591ce082796f24dd3b..b5c26a995bc3d9c930e4908ca9fb16131315f0ab 100644
+index 1d12a870a2f239bf95df639ef350b38911558199..c97e89ff32a84d7e5bcb1e473e24f6fe8331a0e0 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -13,6 +13,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
+@@ -12,6 +12,7 @@ import com.mojang.brigadier.StringReader;
+ import com.mojang.brigadier.exceptions.CommandSyntaxException;
  import com.mojang.serialization.Dynamic;
  import com.mojang.serialization.Lifecycle;
- import io.papermc.paper.configuration.GlobalConfiguration;
-+import io.papermc.paper.pewpew.WorldTickCoordinator;
  import io.papermc.paper.configuration.PaperServerConfiguration;
  import io.papermc.paper.configuration.ServerConfiguration;
- import io.papermc.paper.world.PaperWorldLoader;
-@@ -1176,6 +1177,7 @@ public final class CraftServer implements Server {
++import io.papermc.paper.pewpew.WorldTickCoordinator;
+ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+@@ -1232,6 +1233,7 @@ public final class CraftServer implements Server {
          Preconditions.checkState(this.console.getAllLevels().iterator().hasNext(), "Cannot create additional worlds on STARTUP");
          //Preconditions.checkState(!this.console.isIteratingOverLevels, "Cannot create a world while worlds are being ticked"); // Paper - Cat - Temp disable. We'll see how this goes.
          Preconditions.checkArgument(creator != null, "WorldCreator cannot be null");
@@ -134,7 +134,7 @@ index da49c8005592a154946750591ce082796f24dd3b..b5c26a995bc3d9c930e4908ca9fb1613
  
          String name = creator.name();
          ChunkGenerator chunkGenerator = creator.generator();
-@@ -1327,6 +1329,7 @@ public final class CraftServer implements Server {
+@@ -1430,6 +1432,7 @@ public final class CraftServer implements Server {
          if (world == null) {
              return false;
          }
