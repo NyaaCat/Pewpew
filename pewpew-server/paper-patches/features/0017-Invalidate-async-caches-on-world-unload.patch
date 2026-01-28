@@ -5,18 +5,18 @@ Subject: [PATCH] Invalidate async caches on world unload
 
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index a3acc8ef64942eb298069ab182efb98740d9b293..2eca83525be4050ec0b432acdfb569a426ed41a2 100644
+index 244467c6e7bb8021a596b4a31e792b927864180a..6778667124091eb5f0f00bdbed3319246db1d463 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -15,6 +15,7 @@ import com.mojang.serialization.Lifecycle;
+@@ -16,6 +16,7 @@ import io.papermc.paper.configuration.GlobalConfiguration;
  import io.papermc.paper.configuration.PaperServerConfiguration;
  import io.papermc.paper.configuration.ServerConfiguration;
  import io.papermc.paper.pewpew.PewpewConfig;
 +import io.papermc.paper.pewpew.AsyncSensorService;
  import io.papermc.paper.pewpew.WorldTickCoordinator;
+ import io.papermc.paper.world.PaperWorldLoader;
  import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
- import java.awt.image.BufferedImage;
-@@ -70,6 +71,7 @@ import net.minecraft.server.dedicated.DedicatedServer;
+@@ -67,6 +68,7 @@ import net.minecraft.server.dedicated.DedicatedServer;
  import net.minecraft.server.dedicated.DedicatedServerProperties;
  import net.minecraft.server.dedicated.DedicatedServerSettings;
  import net.minecraft.server.level.ServerLevel;
@@ -24,7 +24,7 @@ index a3acc8ef64942eb298069ab182efb98740d9b293..2eca83525be4050ec0b432acdfb569a4
  import net.minecraft.server.level.ServerPlayer;
  import net.minecraft.server.level.TicketType;
  import net.minecraft.server.players.IpBanListEntry;
-@@ -1469,5 +1471,9 @@ public final class CraftServer implements Server {
+@@ -1366,6 +1368,10 @@ public final class CraftServer implements Server {
  
          this.worlds.remove(world.getName().toLowerCase(Locale.ROOT));
          this.console.removeLevel(handle);
@@ -34,3 +34,4 @@ index a3acc8ef64942eb298069ab182efb98740d9b293..2eca83525be4050ec0b432acdfb569a4
 +        AsyncPathService.invalidateWorld(worldName);
          return true;
      }
+ 
