@@ -5,10 +5,10 @@ Subject: [PATCH] Serialize command execution under world tick coordinator
 
 
 diff --git a/net/minecraft/commands/Commands.java b/net/minecraft/commands/Commands.java
-index 5d0c0f30f58f6d8b6df4d4a6d34f4cb9f1a8f06b..6e2a9f3b4e1d9b2c3f4a5b6c7d8e9f0a1b2c3d4e 100644
+index ec1cced..8658664 100644
 --- a/net/minecraft/commands/Commands.java
 +++ b/net/minecraft/commands/Commands.java
-@@ -24,6 +24,7 @@ import java.util.Optional;
+@@ -21,6 +21,7 @@ import java.util.Optional;
  import java.util.Set;
  import java.util.function.Consumer;
  import java.util.function.Predicate;
@@ -16,27 +16,26 @@ index 5d0c0f30f58f6d8b6df4d4a6d34f4cb9f1a8f06b..6e2a9f3b4e1d9b2c3f4a5b6c7d8e9f0a
  import java.util.function.UnaryOperator;
  import java.util.stream.Collectors;
  import java.util.stream.Stream;
-@@ -160,6 +161,7 @@ public class Commands {
-     public interface RestrictedMarker { } // Paper - restricted api
+@@ -150,6 +151,7 @@ public class Commands {
      public static final String COMMAND_PREFIX = "/";
-     private static final ThreadLocal<@Nullable ExecutionContext<CommandSourceStack>> CURRENT_EXECUTION_CONTEXT = new ThreadLocal<>();
+     private static final ThreadLocal<ExecutionContext<CommandSourceStack>> CURRENT_EXECUTION_CONTEXT = new ThreadLocal<>();
      private static final Logger LOGGER = LogUtils.getLogger();
 +    private static final ReentrantLock COMMAND_EXECUTION_LOCK = new ReentrantLock();
-     public static final PermissionCheck LEVEL_ALL = PermissionCheck.AlwaysPass.INSTANCE;
-     public static final PermissionCheck LEVEL_MODERATORS = new PermissionCheck.Require(Permissions.COMMANDS_MODERATOR);
-     public static final PermissionCheck LEVEL_GAMEMASTERS = new PermissionCheck.Require(Permissions.COMMANDS_GAMEMASTER);
-@@ -454,20 +456,32 @@ public class Commands {
+     public static final int LEVEL_ALL = 0;
+     public static final int LEVEL_MODERATORS = 1;
+     public static final int LEVEL_GAMEMASTERS = 2;
+@@ -438,22 +440,32 @@ public class Commands {
      }
  
      public static void executeCommandInContext(CommandSourceStack source, Consumer<ExecutionContext<CommandSourceStack>> contextConsumer) {
+-        MinecraftServer server = source.getServer();
 -        ExecutionContext<CommandSourceStack> executionContext = CURRENT_EXECUTION_CONTEXT.get();
 -        boolean flag = executionContext == null;
 -        if (flag) {
--            GameRules gameRules = source.getLevel().getGameRules();
--            int max = Math.max(1, gameRules.get(GameRules.MAX_COMMAND_SEQUENCE_LENGTH));
--            int i = gameRules.get(GameRules.MAX_COMMAND_FORKS);
+-            int max = Math.max(1, server.getGameRules().getInt(GameRules.RULE_MAX_COMMAND_CHAIN_LENGTH));
+-            int _int = server.getGameRules().getInt(GameRules.RULE_MAX_COMMAND_FORK_COUNT);
 -
--            try (ExecutionContext<CommandSourceStack> executionContext1 = new ExecutionContext<>(max, i, Profiler.get())) {
+-            try (ExecutionContext<CommandSourceStack> executionContext1 = new ExecutionContext<>(max, _int, Profiler.get())) {
 -                CURRENT_EXECUTION_CONTEXT.set(executionContext1);
 -                contextConsumer.accept(executionContext1);
 -                executionContext1.runCommandQueue();
@@ -47,14 +46,14 @@ index 5d0c0f30f58f6d8b6df4d4a6d34f4cb9f1a8f06b..6e2a9f3b4e1d9b2c3f4a5b6c7d8e9f0a
 +            COMMAND_EXECUTION_LOCK.lock();
 +        }
 +        try {
++            MinecraftServer server = source.getServer();
 +            ExecutionContext<CommandSourceStack> executionContext = CURRENT_EXECUTION_CONTEXT.get();
 +            boolean flag = executionContext == null;
 +            if (flag) {
-+                GameRules gameRules = source.getLevel().getGameRules();
-+                int max = Math.max(1, gameRules.get(GameRules.MAX_COMMAND_SEQUENCE_LENGTH));
-+                int i = gameRules.get(GameRules.MAX_COMMAND_FORKS);
++                int max = Math.max(1, server.getGameRules().getInt(GameRules.RULE_MAX_COMMAND_CHAIN_LENGTH));
++                int _int = server.getGameRules().getInt(GameRules.RULE_MAX_COMMAND_FORK_COUNT);
 +
-+                try (ExecutionContext<CommandSourceStack> executionContext1 = new ExecutionContext<>(max, i, Profiler.get())) {
++                try (ExecutionContext<CommandSourceStack> executionContext1 = new ExecutionContext<>(max, _int, Profiler.get())) {
 +                    CURRENT_EXECUTION_CONTEXT.set(executionContext1);
 +                    contextConsumer.accept(executionContext1);
 +                    executionContext1.runCommandQueue();
@@ -63,12 +62,13 @@ index 5d0c0f30f58f6d8b6df4d4a6d34f4cb9f1a8f06b..6e2a9f3b4e1d9b2c3f4a5b6c7d8e9f0a
 +                }
 +            } else {
 +                contextConsumer.accept(executionContext);
-             }
--        } else {
--            contextConsumer.accept(executionContext);
++            }
 +        } finally {
 +            if (lock) {
 +                COMMAND_EXECUTION_LOCK.unlock();
-+            }
+             }
+-        } else {
+-            contextConsumer.accept(executionContext);
          }
      }
+ 

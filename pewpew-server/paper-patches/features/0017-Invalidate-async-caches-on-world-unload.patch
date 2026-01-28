@@ -5,17 +5,17 @@ Subject: [PATCH] Invalidate async caches on world unload
 
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index 12d98f06b23f13c2f267463556094078d27f6a3f..0e3ff135c166c27d825a11f382ed711b14cd9f0f 100644
+index a3acc8ef64942eb298069ab182efb98740d9b293..2eca83525be4050ec0b432acdfb569a426ed41a2 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -13,6 +13,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
- import com.mojang.serialization.Dynamic;
- import com.mojang.serialization.Lifecycle;
+@@ -15,6 +15,7 @@ import com.mojang.serialization.Lifecycle;
+ import io.papermc.paper.configuration.PaperServerConfiguration;
+ import io.papermc.paper.configuration.ServerConfiguration;
  import io.papermc.paper.pewpew.PewpewConfig;
 +import io.papermc.paper.pewpew.AsyncSensorService;
  import io.papermc.paper.pewpew.WorldTickCoordinator;
- import io.papermc.paper.configuration.PaperServerConfiguration;
- import io.papermc.paper.configuration.ServerConfiguration;
+ import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
+ import java.awt.image.BufferedImage;
 @@ -70,6 +71,7 @@ import net.minecraft.server.dedicated.DedicatedServer;
  import net.minecraft.server.dedicated.DedicatedServerProperties;
  import net.minecraft.server.dedicated.DedicatedServerSettings;
@@ -24,7 +24,7 @@ index 12d98f06b23f13c2f267463556094078d27f6a3f..0e3ff135c166c27d825a11f382ed711b
  import net.minecraft.server.level.ServerPlayer;
  import net.minecraft.server.level.TicketType;
  import net.minecraft.server.players.IpBanListEntry;
-@@ -1469,6 +1471,10 @@ public final class CraftServer implements Server {
+@@ -1469,5 +1471,9 @@ public final class CraftServer implements Server {
  
          this.worlds.remove(world.getName().toLowerCase(Locale.ROOT));
          this.console.removeLevel(handle);
@@ -34,4 +34,3 @@ index 12d98f06b23f13c2f267463556094078d27f6a3f..0e3ff135c166c27d825a11f382ed711b
 +        AsyncPathService.invalidateWorld(worldName);
          return true;
      }
- 
