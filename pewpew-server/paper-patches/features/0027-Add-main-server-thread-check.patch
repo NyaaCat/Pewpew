@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Thu, 29 Jan 2026 03:56:00 +0000
+Subject: [PATCH] Add main server thread check
+
+
+diff --git a/src/main/java/io/papermc/paper/util/MCUtil.java b/src/main/java/io/papermc/paper/util/MCUtil.java
+index 6f7ef2aa..dc8e6d8a 100644
+--- a/src/main/java/io/papermc/paper/util/MCUtil.java
++++ b/src/main/java/io/papermc/paper/util/MCUtil.java
+@@ -84,6 +84,11 @@ public final class MCUtil {
+     public static boolean isMainThread() {
+         return MinecraftServer.getServer().isSameThread();
+     }
++
++    public static boolean isMainServerThread() {
++        final MinecraftServer server = MinecraftServer.getServer();
++        return server != null && Thread.currentThread() == server.getRunningThread();
++    }
+ 
+     public static void ensureMain(Runnable run) {
+         ensureMain(null, run);
