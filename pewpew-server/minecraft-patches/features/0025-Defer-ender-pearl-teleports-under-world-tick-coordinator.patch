@@ -16,7 +16,7 @@ index 5aa63c9..1088350 100644
              Entity owner = this.getOwner();
              if (owner != null && isAllowedToTeleportOwner(owner, serverLevel)) {
 +                final boolean deferTeleport = io.papermc.paper.pewpew.WorldTickCoordinator.isEnabled()
-+                    && !io.papermc.paper.util.MCUtil.isMainThread();
++                    && !io.papermc.paper.util.MCUtil.isMainServerThread();
                  Vec3 vec3 = this.oldPosition();
                  if (owner instanceof ServerPlayer serverPlayer) {
                      if (serverPlayer.connection.isAcceptingMessages()) {
@@ -125,4 +125,3 @@ index 5aa63c9..1088350 100644
                  this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT); // CraftBukkit - add Bukkit remove cause
 -- 
 2.47.3
-
