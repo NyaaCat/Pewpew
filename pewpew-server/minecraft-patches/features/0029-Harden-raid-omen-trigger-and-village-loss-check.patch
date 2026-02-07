@@ -1,0 +1,106 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Sat, 7 Feb 2026 12:30:00 +0000
+Subject: [PATCH] Harden raid omen trigger and village loss check
+
+
+diff --git a/net/minecraft/world/effect/RaidOmenMobEffect.java b/net/minecraft/world/effect/RaidOmenMobEffect.java
+--- a/net/minecraft/world/effect/RaidOmenMobEffect.java
++++ b/net/minecraft/world/effect/RaidOmenMobEffect.java
+@@ -1,9 +1,12 @@
+ package net.minecraft.world.effect;
+ 
++import javax.annotation.Nullable;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.core.particles.ParticleOptions;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.tags.PoiTypeTags;
++import net.minecraft.world.entity.ai.village.poi.PoiManager;
+ import net.minecraft.world.entity.LivingEntity;
+ 
+ class RaidOmenMobEffect extends MobEffect {
+@@ -21,7 +24,10 @@ class RaidOmenMobEffect extends MobEffect {
+         if (entity instanceof ServerPlayer serverPlayer && !entity.isSpectator()) {
+             BlockPos raidOmenPosition = serverPlayer.getRaidOmenPosition();
+             if (raidOmenPosition != null) {
+-                level.getRaids().createOrExtendRaid(serverPlayer, raidOmenPosition);
++                BlockPos triggerPos = this.resolveRaidTriggerPos(level, serverPlayer, raidOmenPosition);
++                if (triggerPos != null) {
++                    level.getRaids().createOrExtendRaid(serverPlayer, triggerPos);
++                }
+                 serverPlayer.clearRaidOmenPosition();
+                 return false;
+             }
+@@ -29,4 +35,21 @@ class RaidOmenMobEffect extends MobEffect {
+ 
+         return true;
+     }
++
++    @Nullable
++    private BlockPos resolveRaidTriggerPos(ServerLevel level, ServerPlayer player, BlockPos storedPos) {
++        if (level.isVillage(storedPos)) {
++            return storedPos;
++        }
++
++        BlockPos playerPos = player.blockPosition();
++        if (level.isVillage(playerPos)) {
++            return playerPos;
++        }
++
++        return level.getPoiManager()
++            .findClosest(type -> type.is(PoiTypeTags.VILLAGE), storedPos, 64, PoiManager.Occupancy.IS_OCCUPIED)
++            .or(() -> level.getPoiManager().findClosest(type -> type.is(PoiTypeTags.VILLAGE), storedPos, 64, PoiManager.Occupancy.ANY))
++            .orElse(null);
++    }
+ }
+diff --git a/net/minecraft/world/entity/raid/Raid.java b/net/minecraft/world/entity/raid/Raid.java
+--- a/net/minecraft/world/entity/raid/Raid.java
++++ b/net/minecraft/world/entity/raid/Raid.java
+@@ -88,6 +88,7 @@ public class Raid {
+     private static final int ALLOW_SPAWNING_WITHIN_VILLAGE_SECONDS_THRESHOLD = 7;
+     private static final int SECTION_RADIUS_FOR_FINDING_NEW_VILLAGE_CENTER = 2;
+     private static final int VILLAGE_SEARCH_RADIUS = 32;
++    private static final int VILLAGE_MISSING_GRACE_TICKS = 40;
+     private static final int RAID_TIMEOUT_TICKS = 48000;
+     private static final int NUM_SPAWN_ATTEMPTS = 5;
+     private static final Component OMINOUS_BANNER_PATTERN_NAME = Component.translatable("block.minecraft.ominous_banner");
+@@ -125,6 +126,7 @@ public class Raid {
+     public final int numGroups;
+     private Raid.RaidStatus status;
+     private int celebrationTicks;
++    private int ticksOutsideVillage;
+     private Optional<BlockPos> waveSpawnPos = Optional.empty();
+ 
+     public Raid(BlockPos center, Difficulty difficulty) {
+@@ -296,18 +298,24 @@ public class Raid {
+                     return;
+                 }
+ 
+-                if (!level.isVillage(this.center)) {
++                boolean inVillage = level.isVillage(this.center);
++                if (!inVillage) {
+                     this.moveRaidCenterToNearbyVillageSection(level);
++                    inVillage = level.isVillage(this.center);
+                 }
+ 
+-                if (!level.isVillage(this.center)) {
++                if (!inVillage) {
+                     if (this.groupsSpawned > 0) {
+-                        this.status = Raid.RaidStatus.LOSS;
+-                        org.bukkit.craftbukkit.event.CraftEventFactory.callRaidFinishEvent(level, this, new java.util.ArrayList<>()); // CraftBukkit
++                        if (++this.ticksOutsideVillage >= VILLAGE_MISSING_GRACE_TICKS) {
++                            this.status = Raid.RaidStatus.LOSS;
++                            org.bukkit.craftbukkit.event.CraftEventFactory.callRaidFinishEvent(level, this, new java.util.ArrayList<>()); // CraftBukkit
++                        }
+                     } else {
+                         org.bukkit.craftbukkit.event.CraftEventFactory.callRaidStopEvent(level, this, org.bukkit.event.raid.RaidStopEvent.Reason.NOT_IN_VILLAGE); // CraftBukkit
+                         this.stop();
+                     }
++                } else {
++                    this.ticksOutsideVillage = 0;
+                 }
+ 
+                 this.ticksActive++;
+-- 
+2.47.3
