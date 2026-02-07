@@ -66,6 +66,9 @@ node_modules/
 tmp/
 test-plugin.settings.gradle.kts
 paper-generator.settings.gradle.kts
+# Multiverse bench generated datapack A/B outputs
+docs/pewpew/findings/multiverse-bench-report-datapack-*.md
+docs/pewpew/findings/multiverse-bench-summary-datapack-*.json
 
 # Paper fork generated content (created by applyPatches)
 paper-api/
