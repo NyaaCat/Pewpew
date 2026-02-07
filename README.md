@@ -12,17 +12,26 @@ any behavior-changing optimizations are opt-in and documented.
 ## Patch workflow
 - Do not edit `pewpew-server/paper-patches` or `pewpew-server/minecraft-patches` directly.
 - Upstream tracking: each version branch pins `paperRef` in `gradle.properties` to a specific Paper `main` commit.
+- Before any `apply*Patches` task, clear generated outputs to avoid stale patch contexts:
+  - `rm -rf paper-api paper-server pewpew-server/src/minecraft`
+  - `rm -rf pewpew-server/minecraft-patches/resources`
 - Stable approach (work in this repo using paperweight, like Paper/SparklyPaper):
-  1) Run `./gradlew applyAllPatches` (or `./gradlew applyPaperApiPatches` + `./gradlew :pewpew-server:applyAllServerPatches`) to regenerate `paper-api/` and `paper-server/`.
-  2) Make changes in `paper-api/` or `paper-server/` (Minecraft changes live under `paper-server/src/minecraft`).
-  3) Regenerate patches via the paperweight tasks (fixup or rebuild); do not hand-edit patch files.
-  4) Verify with `./gradlew :pewpew-server:applyAllServerPatches` and `./gradlew :pewpew-server:compileJava`.
+  1) Clear generated directories first (commands above).
+  2) Run `./gradlew applyAllPatches` (or `./gradlew applyPaperApiPatches` + `./gradlew :pewpew-server:applyAllServerPatches`) to regenerate `paper-api/` and `paper-server/`.
+  3) Make changes in `paper-api/` or `paper-server/` (Minecraft changes live under `paper-server/src/minecraft`).
+  4) Regenerate patches via the paperweight tasks (fixup or rebuild); do not hand-edit patch files.
+  5) Verify with one of the build profiles below.
+- Recommended verification profiles:
+  - Fast patch/apply check: `./gradlew applyAllPatches && ./gradlew :pewpew-server:compileJava`
+  - Full build check (CI parity): `./gradlew applyAllPatches && ./gradlew build`
+  - Do not combine `applyAllPatches` and `build` in a single Gradle invocation; order is not guaranteed in one task graph.
 - Pewpew patches must apply after all Paper patches (`./gradlew :pewpew-server:applyAllServerPatches`).
 - New files become file patches (`pewpew-server/paper-patches/files` or `pewpew-server/minecraft-patches/sources`).
 - `rebuildPaperServerFilePatches` may log a missing `src/main/resources/logo.png`; it is safe to ignore.
 
 ## Build
-- `./gradlew build`
+- Fast server compile: `./gradlew :pewpew-server:compileJava`
+- Full project build: `./gradlew build`
 - `./gradlew :pewpew-server:runDevServer`
 - Production jar (mojmap paperclip): `./gradlew :pewpew-server:createMojmapPaperclipJar`
   - Output: `pewpew-server/build/libs/pewpew-paperclip-*-mojmap.jar`
