@@ -1,14 +1,11 @@
-From b84ad54f6c46d406245e093940c0d43ff867397d Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Wed, 21 Jan 2026 15:34:47 +0000
 Subject: [PATCH] Bind world tick tasks to tick thread
 
----
- net/minecraft/server/MinecraftServer.java | 65 ++++++++++++-----------
- 1 file changed, 34 insertions(+), 31 deletions(-)
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index fa3d49f..6861929 100644
+index fa3d49f5fd289a2b19d95e2036a0376d0cc97f8f..68619296f538a0c37d7804e0121ad5d17d99695c 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
 @@ -1710,39 +1710,42 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
@@ -85,6 +82,3 @@ index fa3d49f..6861929 100644
                  });
              }
              io.papermc.paper.pewpew.WorldTickCoordinator.TickBarrier barrier =
--- 
-2.47.3
-

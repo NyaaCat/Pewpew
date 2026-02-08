@@ -1,14 +1,11 @@
-From 0bc9ace716513e762634dec25c3e0fd1ce55cf21 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Mon, 26 Jan 2026 15:30:10 +0000
 Subject: [PATCH] Defer ender pearl teleports under world tick coordinator
 
----
- .../entity/projectile/ThrownEnderpearl.java   | 88 ++++++++++++-------
- 1 file changed, 56 insertions(+), 32 deletions(-)
 
 diff --git a/net/minecraft/world/entity/projectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/ThrownEnderpearl.java
-index 5aa63c9..1088350 100644
+index 5aa63c90e1c0605faef76588efdc7c3903be4605..6695f125269ea43d47962f943fa3da40e94ebd3b 100644
 --- a/net/minecraft/world/entity/projectile/ThrownEnderpearl.java
 +++ b/net/minecraft/world/entity/projectile/ThrownEnderpearl.java
 @@ -116,6 +116,8 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
@@ -123,5 +120,3 @@ index 5aa63c9..1088350 100644
                  }
  
                  this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT); // CraftBukkit - add Bukkit remove cause
--- 
-2.47.3
