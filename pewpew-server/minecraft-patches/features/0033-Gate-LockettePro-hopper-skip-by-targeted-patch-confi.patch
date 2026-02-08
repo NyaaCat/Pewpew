@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Sun, 8 Feb 2026 07:23:25 +0000
+Subject: [PATCH] Gate LockettePro hopper skip by targeted patch config
+
+
+diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+index 2acbc929fbf619ff93bbea266cc28cc6102dfd4c..55ee243d5b479acd0725bb509bad7580f674cf80 100644
+--- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+@@ -149,7 +149,16 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     private static final int HOPPER_EMPTY = 0;
+     private static final int HOPPER_HAS_ITEMS = 1;
+     private static final int HOPPER_IS_FULL = 2;
+-    private static final String LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY = "lockettepro:locked_container";
++    private static final String LOCKETTEPRO_LOCKED_CONTAINERS_ENABLE_PROPERTY = "pewpew.targetedPatches.locketteproLockedContainers.enabled";
++    private static final String LOCKETTEPRO_LOCKED_CONTAINERS_PDC_KEY_PROPERTY = "pewpew.targetedPatches.locketteproLockedContainers.pdcKey";
++    private static final boolean LOCKETTEPRO_LOCKED_CONTAINERS_ENABLED = Boolean.parseBoolean(System.getProperty(
++        LOCKETTEPRO_LOCKED_CONTAINERS_ENABLE_PROPERTY,
++        "false"
++    ));
++    private static final String LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY = System.getProperty(
++        LOCKETTEPRO_LOCKED_CONTAINERS_PDC_KEY_PROPERTY,
++        "lockettepro:locked_container"
++    ).trim();
+ 
+     private static int getFullState(final HopperBlockEntity hopper) {
+         hopper.unpackLootTable(null);
+@@ -385,6 +394,9 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     }
+ 
+     private static boolean shouldIgnoreForLockettePdc(final @Nullable Container container) {
++        if (!LOCKETTEPRO_LOCKED_CONTAINERS_ENABLED || LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY.isEmpty()) {
++            return false;
++        }
+         if (container instanceof BlockEntity blockEntity) {
+             return hasLocketteLockedContainerPdc(blockEntity);
+         }
