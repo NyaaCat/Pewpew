@@ -5,7 +5,7 @@ Subject: [PATCH] Defer scheduled functions under world tick coordinator
 
 
 diff --git a/net/minecraft/world/level/timers/FunctionCallback.java b/net/minecraft/world/level/timers/FunctionCallback.java
-index edaf8d5..1f59041 100644
+index 243f12734aad47e8052b3dd5ce0ea5e826749fc9..4dcf0fb174226f42b6186ea68f2aad372e11d7af 100644
 --- a/net/minecraft/world/level/timers/FunctionCallback.java
 +++ b/net/minecraft/world/level/timers/FunctionCallback.java
 @@ -3,7 +3,6 @@ package net.minecraft.world.level.timers;
@@ -16,8 +16,7 @@ index edaf8d5..1f59041 100644
  import net.minecraft.resources.Identifier;
  import net.minecraft.server.MinecraftServer;
  import net.minecraft.server.ServerFunctionManager;
-@@ -16,8 +15,16 @@ public record FunctionCallback(Identifier functionId) implements TimerCallback<
-     @Override
+@@ -17,7 +16,15 @@ public record FunctionCallback(Identifier functionId) implements TimerCallback<M
      public void handle(MinecraftServer server, TimerQueue<MinecraftServer> manager, long gameTime) {
          ServerFunctionManager functions = server.getFunctions();
          functions.get(this.functionId)

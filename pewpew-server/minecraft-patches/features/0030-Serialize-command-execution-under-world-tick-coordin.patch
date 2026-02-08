@@ -1,14 +1,11 @@
-From 52b889e4de13f40624bbe23d738e0c6b7846ad89 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Tue, 27 Jan 2026 10:15:00 +0000
 Subject: [PATCH] Serialize command execution under world tick coordinator
 
----
- net/minecraft/commands/Commands.java | 42 ++++++++++++++++++----------
- 1 file changed, 27 insertions(+), 15 deletions(-)
 
 diff --git a/net/minecraft/commands/Commands.java b/net/minecraft/commands/Commands.java
-index 668eb52..a8b1433 100644
+index 668eb52d71d77f75c24d4840be9a6c49d96dfc34..a8b1433c767d4ae473960afc76a43e78cec289f2 100644
 --- a/net/minecraft/commands/Commands.java
 +++ b/net/minecraft/commands/Commands.java
 @@ -21,6 +21,7 @@ import java.util.Optional;
@@ -75,6 +72,3 @@ index 668eb52..a8b1433 100644
          }
      }
  
--- 
-2.47.3
-

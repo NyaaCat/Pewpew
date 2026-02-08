@@ -5,6 +5,7 @@ Subject: [PATCH] Harden raid omen trigger and village loss check
 
 
 diff --git a/net/minecraft/world/effect/RaidOmenMobEffect.java b/net/minecraft/world/effect/RaidOmenMobEffect.java
+index abc973e109d2d93badbcade3d3a86c4df21007f8..3f854ecc376ea98606e893ff8b4ba482dd65301f 100644
 --- a/net/minecraft/world/effect/RaidOmenMobEffect.java
 +++ b/net/minecraft/world/effect/RaidOmenMobEffect.java
 @@ -1,9 +1,12 @@
@@ -55,9 +56,10 @@ diff --git a/net/minecraft/world/effect/RaidOmenMobEffect.java b/net/minecraft/w
 +    }
  }
 diff --git a/net/minecraft/world/entity/raid/Raid.java b/net/minecraft/world/entity/raid/Raid.java
+index 8c6b8439bbfb8d9763767fda7985f26f14c05f3f..a6df2f01e95bf22bc1ba49c117dc916263b3ccd4 100644
 --- a/net/minecraft/world/entity/raid/Raid.java
 +++ b/net/minecraft/world/entity/raid/Raid.java
-@@ -88,6 +88,7 @@ public class Raid {
+@@ -90,6 +90,7 @@ public class Raid {
      private static final int ALLOW_SPAWNING_WITHIN_VILLAGE_SECONDS_THRESHOLD = 7;
      private static final int SECTION_RADIUS_FOR_FINDING_NEW_VILLAGE_CENTER = 2;
      private static final int VILLAGE_SEARCH_RADIUS = 32;
@@ -65,7 +67,7 @@ diff --git a/net/minecraft/world/entity/raid/Raid.java b/net/minecraft/world/ent
      private static final int RAID_TIMEOUT_TICKS = 48000;
      private static final int NUM_SPAWN_ATTEMPTS = 5;
      private static final Component OMINOUS_BANNER_PATTERN_NAME = Component.translatable("block.minecraft.ominous_banner");
-@@ -125,6 +126,7 @@ public class Raid {
+@@ -126,6 +127,7 @@ public class Raid {
      public int numGroups;
      private Raid.RaidStatus status;
      private int celebrationTicks;
@@ -73,7 +75,7 @@ diff --git a/net/minecraft/world/entity/raid/Raid.java b/net/minecraft/world/ent
      private Optional<BlockPos> waveSpawnPos = Optional.empty();
  
      public Raid(BlockPos center, Difficulty difficulty) {
-@@ -296,18 +298,24 @@ public class Raid {
+@@ -297,18 +299,24 @@ public class Raid {
                      return;
                  }
  
@@ -102,5 +104,3 @@ diff --git a/net/minecraft/world/entity/raid/Raid.java b/net/minecraft/world/ent
                  }
  
                  this.ticksActive++;
--- 
-2.47.3
