@@ -1,11 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
-Date: Sun, 8 Feb 2026 07:52:02 +0000
+Date: Sun, 8 Feb 2026 08:00:07 +0000
 Subject: [PATCH] Fix hopper thread-local guards and water item activation
 
 
 diff --git a/io/papermc/paper/entity/activation/ActivationRange.java b/io/papermc/paper/entity/activation/ActivationRange.java
-index c18823746ab2edcab536cb1589b7720e3af07e0f..e198e5095f642b3114a20970c2396f42b9008ae4 100644
+index ae2bb9a73106febfe5f0d090abd4252bbb5fd27e..2c0866f0591a0da33fc100029ef56efd814ed3ab 100644
 --- a/io/papermc/paper/entity/activation/ActivationRange.java
 +++ b/io/papermc/paper/entity/activation/ActivationRange.java
 @@ -288,10 +288,19 @@ public final class ActivationRange {
@@ -31,35 +31,35 @@ index c18823746ab2edcab536cb1589b7720e3af07e0f..e198e5095f642b3114a20970c2396f42
          // immunize brand-new entities, dead entities, and portal scenarios
          if (entity.defaultActivationState || entity.tickCount < 20 * 10 || !entity.isAlive() || (entity.portalProcess != null && !entity.portalProcess.hasExpired()) || entity.portalCooldown > 0) {
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index cfaf0db7fb1d296e8b627aa2074b37b79d75269a..ccee032d0eea47ff1ab13e875556810ba5a6f043 100644
+index 68619296f538a0c37d7804e0121ad5d17d99695c..1feed152d6ad7ed23df90543d47046ef7034ceab 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1815,7 +1815,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1716,7 +1716,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                          serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
                          serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
                          serverLevel.updateLagCompensationTick(); // Paper - lag compensation
 -                        net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
 +                        net.minecraft.world.level.block.entity.HopperBlockEntity.setSkipHopperEvents(serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0); // Paper - Perf: Optimize Hoppers
-                         worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
+                         worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().location());
                          /* Drop global time updates
                          if (this.tickCount % 20 == 0) {
-@@ -1860,7 +1860,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1761,7 +1761,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                  serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
                  serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
                  serverLevel.updateLagCompensationTick(); // Paper - lag compensation
 -                net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
 +                net.minecraft.world.level.block.entity.HopperBlockEntity.setSkipHopperEvents(serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0); // Paper - Perf: Optimize Hoppers
-                 profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
+                 profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().location());
                  /* Drop global time updates
                  if (this.tickCount % 20 == 0) {
 diff --git a/net/minecraft/world/level/block/entity/BlockEntity.java b/net/minecraft/world/level/block/entity/BlockEntity.java
-index fb22ebe9758014ebf2aebcda21155f1c4c83fafe..b633dc9b775f1f2ae0082e462326acaa626e2e6a 100644
+index 5986825d6a381eeb445dd424dd127864aa703163..25d55007411010593a5f4f9c6d53b2189ef8d1c9 100644
 --- a/net/minecraft/world/level/block/entity/BlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/BlockEntity.java
-@@ -37,7 +37,17 @@ import org.jspecify.annotations.Nullable;
+@@ -35,7 +35,17 @@ import net.minecraft.world.level.storage.ValueOutput;
  import org.slf4j.Logger;
  
- public abstract class BlockEntity implements DebugValueSource {
+ public abstract class BlockEntity {
 -    static boolean ignoreBlockEntityUpdates; // Paper - Perf: Optimize Hoppers
 +    // Pewpew start - thread-local hopper update suppression under parallel world ticking
 +    private static final ThreadLocal<Boolean> IGNORE_BLOCK_ENTITY_UPDATES = ThreadLocal.withInitial(() -> Boolean.FALSE);
@@ -75,7 +75,7 @@ index fb22ebe9758014ebf2aebcda21155f1c4c83fafe..b633dc9b775f1f2ae0082e462326acaa
      // CraftBukkit start - data containers
      private static final org.bukkit.craftbukkit.persistence.CraftPersistentDataTypeRegistry DATA_TYPE_REGISTRY = new org.bukkit.craftbukkit.persistence.CraftPersistentDataTypeRegistry();
      public final org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer persistentDataContainer;
-@@ -227,7 +237,7 @@ public abstract class BlockEntity implements DebugValueSource {
+@@ -228,7 +238,7 @@ public abstract class BlockEntity {
  
      public void setChanged() {
          if (this.level != null) {
@@ -85,10 +85,10 @@ index fb22ebe9758014ebf2aebcda21155f1c4c83fafe..b633dc9b775f1f2ae0082e462326acaa
          }
      }
 diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d94efb2642 100644
+index d37a0969069417edd9c8555bd4365dcbcfd6f80a..1ce6c224daf85342dc35bb4c5b895e66abe13011 100644
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-@@ -229,12 +229,36 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -228,12 +228,36 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
      }
  
      // Paper start - Perf: Optimize Hoppers
@@ -129,7 +129,7 @@ index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d9
          boolean foundItem = false;
          for (int i = 0; i < hopper.getContainerSize(); ++i) {
              final ItemStack item = hopper.getItem(i);
-@@ -249,7 +273,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -248,7 +272,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
  
                  // We only need to fire the event once to give protection plugins a chance to cancel this event
                  // Because nothing uses getItem, every event call should end up the same result.
@@ -138,7 +138,7 @@ index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d9
                      movedItem = callPushMoveEvent(destination, movedItem, hopper);
                      if (movedItem == null) { // cancelled
                          origItemStack.setCount(originalItemCount);
-@@ -285,7 +309,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -284,7 +308,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
          container.setChanged(); // original logic always marks source inv as changed even if no move happens.
          movedItem.setCount(movedItemCount);
  
@@ -147,7 +147,7 @@ index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d9
              movedItem = callPullMoveEvent(hopper, container, movedItem);
              if (movedItem == null) { // cancelled
                  origItemStack.setCount(originalItemCount);
-@@ -305,9 +329,12 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -304,9 +328,12 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
                  origItemStack.setCount(originalItemCount - movedItemCount + remainingItemCount);
              }
  
@@ -163,7 +163,7 @@ index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d9
              container.setChanged();
              return true;
          }
-@@ -331,7 +358,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -330,7 +357,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
          );
          final boolean result = event.callEvent();
          if (!event.calledGetItem && !event.calledSetItem) {
@@ -172,7 +172,7 @@ index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d9
          }
          if (!result) {
              applyCooldown(hopper);
-@@ -354,7 +381,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -353,7 +380,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
          final io.papermc.paper.event.inventory.PaperInventoryMoveItemEvent event = new io.papermc.paper.event.inventory.PaperInventoryMoveItemEvent(sourceInventory, org.bukkit.craftbukkit.inventory.CraftItemStack.asCraftMirror(itemstack), destination, false);
          final boolean result = event.callEvent();
          if (!event.calledGetItem && !event.calledSetItem) {
@@ -181,7 +181,7 @@ index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d9
          }
          if (!result) {
              applyCooldown(hopper);
-@@ -562,7 +589,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -561,7 +588,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
          Container sourceContainer = getSourceContainer(level, hopper, blockPos, blockState);
          if (sourceContainer != null) {
              Direction direction = Direction.DOWN;
@@ -190,7 +190,7 @@ index 55ee243d5b479acd0725bb509bad7580f674cf80..fda02c71e7b553335239b4bb22d7a5d9
  
              for (int i : getSlots(sourceContainer, direction)) {
                  if (tryTakeInItemFromSlot(hopper, sourceContainer, i, direction, level)) { // Spigot
-@@ -711,9 +738,12 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -710,9 +737,12 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
                      stack = stack.split(destination.getMaxStackSize());
                  }
                  // Spigot end
