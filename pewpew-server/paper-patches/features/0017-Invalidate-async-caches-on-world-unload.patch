@@ -24,7 +24,7 @@ index a3acc8ef64942eb298069ab182efb98740d9b293..2eca83525be4050ec0b432acdfb569a4
  import net.minecraft.server.level.ServerPlayer;
  import net.minecraft.server.level.TicketType;
  import net.minecraft.server.players.IpBanListEntry;
-@@ -1469,5 +1471,9 @@ public final class CraftServer implements Server {
+@@ -1469,6 +1471,10 @@ public final class CraftServer implements Server {
  
          this.worlds.remove(world.getName().toLowerCase(Locale.ROOT));
          this.console.removeLevel(handle);
@@ -34,3 +34,4 @@ index a3acc8ef64942eb298069ab182efb98740d9b293..2eca83525be4050ec0b432acdfb569a4
 +        AsyncPathService.invalidateWorld(worldName);
          return true;
      }
+ 

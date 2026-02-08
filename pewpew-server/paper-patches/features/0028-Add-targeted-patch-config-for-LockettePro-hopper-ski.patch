@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Sun, 8 Feb 2026 07:19:36 +0000
+Subject: [PATCH] Add targeted patch config for LockettePro hopper skip
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+index 77a001c73213fb6c2758fdf21d8a8b9aaa1c3232..3f380b524b3e4b43ab9417ed75d2bf916b8e4cb7 100644
+--- a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
++++ b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+@@ -38,6 +38,8 @@ public final class PewpewConfig {
+     public static int worldTickCoordinatorWorkers;
+     public static long worldTickCoordinatorStallThresholdNanos;
+     public static List<String> worldTickCoordinatorDedicatedWorlds;
++    public static boolean locketteproLockedContainersEnabled;
++    public static String locketteproLockedContainersPdcKey;
+ 
+     private PewpewConfig() {
+     }
+@@ -76,6 +78,8 @@ public final class PewpewConfig {
+         worldTickCoordinatorWorkers = getInt("settings.world-tick-coordinator-workers", -1);
+         worldTickCoordinatorStallThresholdNanos = getLong("settings.world-tick-coordinator-stall-threshold-nanos", 50_000_000L);
+         worldTickCoordinatorDedicatedWorlds = getStringList("settings.world-tick-coordinator-dedicated-worlds");
++        locketteproLockedContainersEnabled = getBoolean("targeted-patches.lockettepro-locked-containers.enabled", false);
++        locketteproLockedContainersPdcKey = getString("targeted-patches.lockettepro-locked-containers.pdc-key", "lockettepro:locked_container");
+ 
+         applySystemProperties();
+         logFeatureFlags();
+@@ -107,6 +111,8 @@ public final class PewpewConfig {
+         setOptionalIntProperty("pewpew.worldTickCoordinator.workers", worldTickCoordinatorWorkers);
+         setOptionalLongProperty("pewpew.worldTickCoordinator.stallThresholdNanos", worldTickCoordinatorStallThresholdNanos);
+         setOptionalStringListProperty("pewpew.worldTickCoordinator.dedicatedWorlds", worldTickCoordinatorDedicatedWorlds);
++        setBooleanProperty("pewpew.targetedPatches.locketteproLockedContainers.enabled", locketteproLockedContainersEnabled);
++        setStringProperty("pewpew.targetedPatches.locketteproLockedContainers.pdcKey", locketteproLockedContainersPdcKey);
+     }
+ 
+     private static void logFeatureFlags() {
+@@ -125,6 +131,9 @@ public final class PewpewConfig {
+         LOGGER.info("Pewpew settings: world-tick-max-workers=" + formatOptional(worldTickCoordinatorWorkers)
+             + " world-tick-stall-threshold-nanos=" + worldTickCoordinatorStallThresholdNanos
+             + " world-tick-dedicated-worlds=" + formatOptionalList(worldTickCoordinatorDedicatedWorlds));
++        LOGGER.info("Pewpew targeted patches: lockettepro-locked-containers="
++            + (locketteproLockedContainersEnabled ? "enabled" : "disabled")
++            + " pdc-key=" + locketteproLockedContainersPdcKey);
+     }
+ 
+     private static void logFlag(final String name, final boolean enabled) {
+@@ -149,6 +158,14 @@ public final class PewpewConfig {
+         System.setProperty(key, Boolean.toString(value));
+     }
+ 
++    private static void setStringProperty(final String key, final String value) {
++        if (value == null || value.isEmpty()) {
++            System.clearProperty(key);
++            return;
++        }
++        System.setProperty(key, value);
++    }
++
+     private static void setOptionalIntProperty(final String key, final int value) {
+         if (value <= 0) {
+             System.clearProperty(key);
+@@ -197,6 +214,16 @@ public final class PewpewConfig {
+         return sanitizeStringList(config.getStringList(path));
+     }
+ 
++    private static String getString(final String path, final String def) {
++        config.addDefault(path, def);
++        final String configured = config.getString(path, def);
++        if (configured == null) {
++            return def;
++        }
++        final String trimmed = configured.trim();
++        return trimmed.isEmpty() ? def : trimmed;
++    }
++
+     private static List<String> sanitizeStringList(final List<String> values) {
+         if (values == null || values.isEmpty()) {
+             return List.of();
+@@ -214,4 +241,4 @@ public final class PewpewConfig {
+         }
+         return List.copyOf(cleaned);
+     }
+-}
+\ No newline at end of file
++}
