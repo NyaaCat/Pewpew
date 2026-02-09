@@ -1,0 +1,190 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Mon, 9 Feb 2026 01:22:21 +0000
+Subject: [PATCH] Allow hopper push into lockette containers via config
+
+
+diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d08cf2e22c 100644
+--- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
++++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
+@@ -150,11 +150,16 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     private static final int HOPPER_HAS_ITEMS = 1;
+     private static final int HOPPER_IS_FULL = 2;
+     private static final String LOCKETTEPRO_LOCKED_CONTAINERS_ENABLE_PROPERTY = "pewpew.targetedPatches.locketteproLockedContainers.enabled";
++    private static final String LOCKETTEPRO_LOCKED_CONTAINERS_SKIP_DESTINATION_PROPERTY = "pewpew.targetedPatches.locketteproLockedContainers.skipDestination";
+     private static final String LOCKETTEPRO_LOCKED_CONTAINERS_PDC_KEY_PROPERTY = "pewpew.targetedPatches.locketteproLockedContainers.pdcKey";
+     private static final boolean LOCKETTEPRO_LOCKED_CONTAINERS_ENABLED = Boolean.parseBoolean(System.getProperty(
+         LOCKETTEPRO_LOCKED_CONTAINERS_ENABLE_PROPERTY,
+         "false"
+     ));
++    private static final boolean LOCKETTEPRO_LOCKED_CONTAINERS_SKIP_DESTINATION = Boolean.parseBoolean(System.getProperty(
++        LOCKETTEPRO_LOCKED_CONTAINERS_SKIP_DESTINATION_PROPERTY,
++        "true"
++    ));
+     private static final String LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY = System.getProperty(
+         LOCKETTEPRO_LOCKED_CONTAINERS_PDC_KEY_PROPERTY,
+         "lockettepro:locked_container"
+@@ -420,15 +425,24 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+         return blockEntity.persistentDataContainer.getTag(LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY) != null;
+     }
+ 
+-    private static boolean shouldIgnoreForLockettePdc(final @Nullable Container container) {
++    private enum LocketteContainerQueryType {
++        SOURCE,
++        DESTINATION,
++        UNKNOWN
++    }
++
++    private static boolean shouldIgnoreForLockettePdc(final @Nullable Container container, final LocketteContainerQueryType queryType) {
+         if (!LOCKETTEPRO_LOCKED_CONTAINERS_ENABLED || LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY.isEmpty()) {
+             return false;
+         }
++        if (queryType == LocketteContainerQueryType.DESTINATION && !LOCKETTEPRO_LOCKED_CONTAINERS_SKIP_DESTINATION) {
++            return false;
++        }
+         if (container instanceof BlockEntity blockEntity) {
+             return hasLocketteLockedContainerPdc(blockEntity);
+         }
+         if (container instanceof CompoundContainer compoundContainer) {
+-            return shouldIgnoreForLockettePdc(compoundContainer.container1) || shouldIgnoreForLockettePdc(compoundContainer.container2);
++            return shouldIgnoreForLockettePdc(compoundContainer.container1, queryType) || shouldIgnoreForLockettePdc(compoundContainer.container2, queryType);
+         }
+         return false;
+     }
+@@ -792,8 +806,8 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     private static @Nullable Container getAttachedContainer(Level level, BlockPos pos, HopperBlockEntity blockEntity) {
+         // Paper start
+         BlockPos searchPosition = pos.relative(blockEntity.facing);
+-        Container inventory = getContainerAt(level, searchPosition);
+-        if (shouldIgnoreForLockettePdc(inventory)) {
++        Container inventory = getContainerAt(level, searchPosition, LocketteContainerQueryType.DESTINATION);
++        if (shouldIgnoreForLockettePdc(inventory, LocketteContainerQueryType.DESTINATION)) {
+             inventory = null;
+         }
+         if (org.bukkit.event.inventory.HopperInventorySearchEvent.getHandlerList().getRegisteredListeners().length == 0) return inventory;
+@@ -806,14 +820,22 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+             searchBlock,
+             org.bukkit.event.inventory.HopperInventorySearchEvent.ContainerType.DESTINATION
+         );
+-        return shouldIgnoreForLockettePdc(eventResult) ? null : eventResult;
++        return shouldIgnoreForLockettePdc(eventResult, LocketteContainerQueryType.DESTINATION) ? null : eventResult;
+         // Paper end
+     }
+ 
+     private static @Nullable Container getSourceContainer(Level level, Hopper hopper, BlockPos pos, BlockState state) {
+         // Paper start
+-        Container inventory = HopperBlockEntity.getContainerAt(level, pos, state, hopper.getLevelX(), hopper.getLevelY() + 1.0D, hopper.getLevelZ());
+-        if (shouldIgnoreForLockettePdc(inventory)) {
++        Container inventory = HopperBlockEntity.getContainerAt(
++            level,
++            pos,
++            state,
++            hopper.getLevelX(),
++            hopper.getLevelY() + 1.0D,
++            hopper.getLevelZ(),
++            LocketteContainerQueryType.SOURCE
++        );
++        if (shouldIgnoreForLockettePdc(inventory, LocketteContainerQueryType.SOURCE)) {
+             inventory = null;
+         }
+         if (org.bukkit.event.inventory.HopperInventorySearchEvent.getHandlerList().getRegisteredListeners().length == 0) return inventory;
+@@ -827,7 +849,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+             containerBlock,
+             org.bukkit.event.inventory.HopperInventorySearchEvent.ContainerType.SOURCE
+         );
+-        return shouldIgnoreForLockettePdc(eventResult) ? null : eventResult;
++        return shouldIgnoreForLockettePdc(eventResult, LocketteContainerQueryType.SOURCE) ? null : eventResult;
+         // Paper end
+     }
+ 
+@@ -837,16 +859,64 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     }
+ 
+     public static @Nullable Container getContainerAt(Level level, BlockPos pos) {
+-        return getContainerAt(level, pos, level.getBlockState(pos), pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, true); // Paper - Optimize hoppers
++        return getContainerAt(
++            level,
++            pos,
++            level.getBlockState(pos),
++            pos.getX() + 0.5,
++            pos.getY() + 0.5,
++            pos.getZ() + 0.5,
++            true,
++            LocketteContainerQueryType.UNKNOWN
++        ); // Paper - Optimize hoppers
++    }
++
++    private static @Nullable Container getContainerAt(Level level, BlockPos pos, final LocketteContainerQueryType queryType) {
++        return getContainerAt(
++            level,
++            pos,
++            level.getBlockState(pos),
++            pos.getX() + 0.5,
++            pos.getY() + 0.5,
++            pos.getZ() + 0.5,
++            true,
++            queryType
++        );
+     }
+ 
+     private static @Nullable Container getContainerAt(Level level, BlockPos pos, BlockState state, double x, double y, double z) {
+         // Paper start - Perf: Optimize Hoppers
+-        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, false);
++        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, false, LocketteContainerQueryType.UNKNOWN);
++    }
++
++    private static @Nullable Container getContainerAt(
++        Level level,
++        BlockPos pos,
++        BlockState state,
++        double x,
++        double y,
++        double z,
++        final LocketteContainerQueryType queryType
++    ) {
++        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, false, queryType);
+     }
++
+     private static @Nullable Container getContainerAt(Level level, BlockPos pos, BlockState state, double x, double y, double z, final boolean optimizeEntities) {
++        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, optimizeEntities, LocketteContainerQueryType.UNKNOWN);
++    }
++
++    private static @Nullable Container getContainerAt(
++        Level level,
++        BlockPos pos,
++        BlockState state,
++        double x,
++        double y,
++        double z,
++        final boolean optimizeEntities,
++        final LocketteContainerQueryType queryType
++    ) {
+         // Paper end - Perf: Optimize Hoppers
+-        Container blockContainer = getBlockContainer(level, pos, state);
++        Container blockContainer = getBlockContainer(level, pos, state, queryType);
+         if (blockContainer == null && (!optimizeEntities || !level.paperConfig().hopper.ignoreOccludingBlocks || !state.getBukkitMaterial().isOccluding())) { // Paper - Perf: Optimize Hoppers
+             blockContainer = getEntityContainer(level, x, y, z);
+         }
+@@ -854,18 +924,18 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+         return blockContainer;
+     }
+ 
+-    private static @Nullable Container getBlockContainer(Level level, BlockPos pos, BlockState state) {
++    private static @Nullable Container getBlockContainer(Level level, BlockPos pos, BlockState state, final LocketteContainerQueryType queryType) {
+         if (!level.spigotConfig.hopperCanLoadChunks && !level.hasChunkAt(pos)) return null; // Spigot
+         Block block = state.getBlock();
+         if (block instanceof WorldlyContainerHolder) {
+             Container container = ((WorldlyContainerHolder)block).getContainer(state, level, pos);
+-            return shouldIgnoreForLockettePdc(container) ? null : container;
++            return shouldIgnoreForLockettePdc(container, queryType) ? null : container;
+         } else if (state.hasBlockEntity() && level.getBlockEntity(pos) instanceof Container container) {
+             if (container instanceof ChestBlockEntity && block instanceof ChestBlock) {
+                 container = ChestBlock.getContainer((ChestBlock)block, state, level, pos, true);
+             }
+ 
+-            return shouldIgnoreForLockettePdc(container) ? null : container;
++            return shouldIgnoreForLockettePdc(container, queryType) ? null : container;
+         } else {
+             return null;
+         }
