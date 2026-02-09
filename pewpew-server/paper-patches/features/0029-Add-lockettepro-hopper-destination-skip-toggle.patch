@@ -1,0 +1,78 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Mon, 9 Feb 2026 01:22:21 +0000
+Subject: [PATCH] Add lockettepro hopper destination skip toggle
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+index 3f380b524b3e4b43ab9417ed75d2bf916b8e4cb7..7a265e733863a6adaede2c8cc129a0cefc295620 100644
+--- a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
++++ b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+@@ -30,6 +30,8 @@ public final class PewpewConfig {
+     public static boolean worldTickCoordinatorTesting;
+     public static boolean asyncPoolTesting;
+     public static boolean tickThreadHardThrow;
++    public static boolean debugXpPipeline;
++    public static boolean debugXpEventListeners;
+ 
+     public static int asyncPoolWorkers;
+     public static int asyncPoolQueueLimit;
+@@ -39,6 +41,7 @@ public final class PewpewConfig {
+     public static long worldTickCoordinatorStallThresholdNanos;
+     public static List<String> worldTickCoordinatorDedicatedWorlds;
+     public static boolean locketteproLockedContainersEnabled;
++    public static boolean locketteproLockedContainersSkipDestination;
+     public static String locketteproLockedContainersPdcKey;
+ 
+     private PewpewConfig() {
+@@ -70,6 +73,8 @@ public final class PewpewConfig {
+         worldTickCoordinatorTesting = getBoolean("features.world-tick-coordinator-testing", false);
+         asyncPoolTesting = getBoolean("features.async-pool-testing", false);
+         tickThreadHardThrow = getBoolean("features.tick-thread-hard-throw", true);
++        debugXpPipeline = getBoolean("debug.xp-pipeline", false);
++        debugXpEventListeners = getBoolean("debug.xp-event-listeners", false);
+ 
+         asyncPoolWorkers = getInt("settings.async-pool-workers", -1);
+         asyncPoolQueueLimit = getInt("settings.async-pool-queue-limit", -1);
+@@ -79,6 +84,7 @@ public final class PewpewConfig {
+         worldTickCoordinatorStallThresholdNanos = getLong("settings.world-tick-coordinator-stall-threshold-nanos", 50_000_000L);
+         worldTickCoordinatorDedicatedWorlds = getStringList("settings.world-tick-coordinator-dedicated-worlds");
+         locketteproLockedContainersEnabled = getBoolean("targeted-patches.lockettepro-locked-containers.enabled", false);
++        locketteproLockedContainersSkipDestination = getBoolean("targeted-patches.lockettepro-locked-containers.skip-destination", true);
+         locketteproLockedContainersPdcKey = getString("targeted-patches.lockettepro-locked-containers.pdc-key", "lockettepro:locked_container");
+ 
+         applySystemProperties();
+@@ -98,6 +104,8 @@ public final class PewpewConfig {
+         setBooleanProperty("pewpew.worldTickCoordinator", worldTickCoordinator);
+         setBooleanProperty("pewpew.worldTickCoordinator.testing", worldTickCoordinatorTesting);
+         setBooleanProperty("pewpew.async.testing", asyncPoolTesting);
++        setBooleanProperty("pewpew.debug.xpPipeline", debugXpPipeline);
++        setBooleanProperty("pewpew.debug.xpEventListeners", debugXpEventListeners);
+         if (tickThreadHardThrow) {
+             System.clearProperty("pewpew.disableHardThrow");
+         } else {
+@@ -112,6 +120,7 @@ public final class PewpewConfig {
+         setOptionalLongProperty("pewpew.worldTickCoordinator.stallThresholdNanos", worldTickCoordinatorStallThresholdNanos);
+         setOptionalStringListProperty("pewpew.worldTickCoordinator.dedicatedWorlds", worldTickCoordinatorDedicatedWorlds);
+         setBooleanProperty("pewpew.targetedPatches.locketteproLockedContainers.enabled", locketteproLockedContainersEnabled);
++        setBooleanProperty("pewpew.targetedPatches.locketteproLockedContainers.skipDestination", locketteproLockedContainersSkipDestination);
+         setStringProperty("pewpew.targetedPatches.locketteproLockedContainers.pdcKey", locketteproLockedContainersPdcKey);
+     }
+ 
+@@ -124,6 +133,8 @@ public final class PewpewConfig {
+         logFlag("world-tick-coordinator-testing", worldTickCoordinatorTesting);
+         logFlag("async-pool-testing", asyncPoolTesting);
+         logFlag("tick-thread-hard-throw", tickThreadHardThrow);
++        logFlag("debug.xp-pipeline", debugXpPipeline);
++        logFlag("debug.xp-event-listeners", debugXpEventListeners);
+         LOGGER.info("Pewpew settings: async-pool-workers=" + formatOptional(asyncPoolWorkers)
+             + " async-pool-queue-limit=" + formatOptional(asyncPoolQueueLimit)
+             + " async-pathfinding-max-pending=" + formatOptional(asyncPathfindingMaxPending)
+@@ -133,6 +144,7 @@ public final class PewpewConfig {
+             + " world-tick-dedicated-worlds=" + formatOptionalList(worldTickCoordinatorDedicatedWorlds));
+         LOGGER.info("Pewpew targeted patches: lockettepro-locked-containers="
+             + (locketteproLockedContainersEnabled ? "enabled" : "disabled")
++            + " skip-destination=" + (locketteproLockedContainersSkipDestination ? "enabled" : "disabled")
+             + " pdc-key=" + locketteproLockedContainersPdcKey);
+     }
+ 
