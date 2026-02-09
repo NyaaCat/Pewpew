@@ -1,14 +1,17 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From 1d8b592429d49fdb45d942234751267b8a94dcfd Mon Sep 17 00:00:00 2001
 From: Phoenix Bot <w@c.at>
 Date: Mon, 9 Feb 2026 01:22:21 +0000
 Subject: [PATCH] Allow hopper push into lockette containers via config
 
+---
+ .../level/block/entity/HopperBlockEntity.java | 98 ++++++++++++++++---
+ 1 file changed, 84 insertions(+), 14 deletions(-)
 
 diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d08cf2e22c 100644
+index 1ce6c22..743258f 100644
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-@@ -150,11 +150,16 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -149,11 +149,16 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
      private static final int HOPPER_HAS_ITEMS = 1;
      private static final int HOPPER_IS_FULL = 2;
      private static final String LOCKETTEPRO_LOCKED_CONTAINERS_ENABLE_PROPERTY = "pewpew.targetedPatches.locketteproLockedContainers.enabled";
@@ -25,7 +28,7 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
      private static final String LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY = System.getProperty(
          LOCKETTEPRO_LOCKED_CONTAINERS_PDC_KEY_PROPERTY,
          "lockettepro:locked_container"
-@@ -420,15 +425,24 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -419,15 +424,24 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
          return blockEntity.persistentDataContainer.getTag(LOCKETTEPRO_LOCKED_CONTAINER_PDC_KEY) != null;
      }
  
@@ -52,8 +55,8 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
          }
          return false;
      }
-@@ -792,8 +806,8 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
-     private static @Nullable Container getAttachedContainer(Level level, BlockPos pos, HopperBlockEntity blockEntity) {
+@@ -793,8 +807,8 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+     private static Container getAttachedContainer(Level level, BlockPos pos, HopperBlockEntity blockEntity) {
          // Paper start
          BlockPos searchPosition = pos.relative(blockEntity.facing);
 -        Container inventory = getContainerAt(level, searchPosition);
@@ -63,7 +66,7 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
              inventory = null;
          }
          if (org.bukkit.event.inventory.HopperInventorySearchEvent.getHandlerList().getRegisteredListeners().length == 0) return inventory;
-@@ -806,14 +820,22 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -807,15 +821,23 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
              searchBlock,
              org.bukkit.event.inventory.HopperInventorySearchEvent.ContainerType.DESTINATION
          );
@@ -72,7 +75,8 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
          // Paper end
      }
  
-     private static @Nullable Container getSourceContainer(Level level, Hopper hopper, BlockPos pos, BlockState state) {
+     @Nullable
+     private static Container getSourceContainer(Level level, Hopper hopper, BlockPos pos, BlockState state) {
          // Paper start
 -        Container inventory = HopperBlockEntity.getContainerAt(level, pos, state, hopper.getLevelX(), hopper.getLevelY() + 1.0D, hopper.getLevelZ());
 -        if (shouldIgnoreForLockettePdc(inventory)) {
@@ -89,7 +93,7 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
              inventory = null;
          }
          if (org.bukkit.event.inventory.HopperInventorySearchEvent.getHandlerList().getRegisteredListeners().length == 0) return inventory;
-@@ -827,7 +849,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -829,7 +851,7 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
              containerBlock,
              org.bukkit.event.inventory.HopperInventorySearchEvent.ContainerType.SOURCE
          );
@@ -98,10 +102,10 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
          // Paper end
      }
  
-@@ -837,16 +859,64 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
-     }
+@@ -840,18 +862,66 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
  
-     public static @Nullable Container getContainerAt(Level level, BlockPos pos) {
+     @Nullable
+     public static Container getContainerAt(Level level, BlockPos pos) {
 -        return getContainerAt(level, pos, level.getBlockState(pos), pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, true); // Paper - Optimize hoppers
 +        return getContainerAt(
 +            level,
@@ -115,7 +119,8 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
 +        ); // Paper - Optimize hoppers
 +    }
 +
-+    private static @Nullable Container getContainerAt(Level level, BlockPos pos, final LocketteContainerQueryType queryType) {
++    @Nullable
++    private static Container getContainerAt(Level level, BlockPos pos, final LocketteContainerQueryType queryType) {
 +        return getContainerAt(
 +            level,
 +            pos,
@@ -128,13 +133,14 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
 +        );
      }
  
-     private static @Nullable Container getContainerAt(Level level, BlockPos pos, BlockState state, double x, double y, double z) {
+     @Nullable
+     private static Container getContainerAt(Level level, BlockPos pos, BlockState state, double x, double y, double z) {
          // Paper start - Perf: Optimize Hoppers
 -        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, false);
 +        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, false, LocketteContainerQueryType.UNKNOWN);
 +    }
-+
-+    private static @Nullable Container getContainerAt(
++    @Nullable
++    private static Container getContainerAt(
 +        Level level,
 +        BlockPos pos,
 +        BlockState state,
@@ -145,12 +151,12 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
 +    ) {
 +        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, false, queryType);
      }
-+
-     private static @Nullable Container getContainerAt(Level level, BlockPos pos, BlockState state, double x, double y, double z, final boolean optimizeEntities) {
+     @Nullable
+     private static Container getContainerAt(Level level, BlockPos pos, BlockState state, double x, double y, double z, final boolean optimizeEntities) {
 +        return HopperBlockEntity.getContainerAt(level, pos, state, x, y, z, optimizeEntities, LocketteContainerQueryType.UNKNOWN);
 +    }
-+
-+    private static @Nullable Container getContainerAt(
++    @Nullable
++    private static Container getContainerAt(
 +        Level level,
 +        BlockPos pos,
 +        BlockState state,
@@ -166,12 +172,12 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
          if (blockContainer == null && (!optimizeEntities || !level.paperConfig().hopper.ignoreOccludingBlocks || !state.getBukkitMaterial().isOccluding())) { // Paper - Perf: Optimize Hoppers
              blockContainer = getEntityContainer(level, x, y, z);
          }
-@@ -854,18 +924,18 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
-         return blockContainer;
+@@ -860,18 +930,18 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
      }
  
--    private static @Nullable Container getBlockContainer(Level level, BlockPos pos, BlockState state) {
-+    private static @Nullable Container getBlockContainer(Level level, BlockPos pos, BlockState state, final LocketteContainerQueryType queryType) {
+     @Nullable
+-    private static Container getBlockContainer(Level level, BlockPos pos, BlockState state) {
++    private static Container getBlockContainer(Level level, BlockPos pos, BlockState state, final LocketteContainerQueryType queryType) {
          if (!level.spigotConfig.hopperCanLoadChunks && !level.hasChunkAt(pos)) return null; // Spigot
          Block block = state.getBlock();
          if (block instanceof WorldlyContainerHolder) {
@@ -188,3 +194,6 @@ index fda02c71e7b553335239b4bb22d7a5d94efb2642..f84660c9d7e145312e28640a9b00b7d0
          } else {
              return null;
          }
+-- 
+2.47.3
+
