@@ -31,10 +31,10 @@ index c18823746ab2edcab536cb1589b7720e3af07e0f..e198e5095f642b3114a20970c2396f42
          // immunize brand-new entities, dead entities, and portal scenarios
          if (entity.defaultActivationState || entity.tickCount < 20 * 10 || !entity.isAlive() || (entity.portalProcess != null && !entity.portalProcess.hasExpired()) || entity.portalCooldown > 0) {
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index cfaf0db7fb1d296e8b627aa2074b37b79d75269a..ccee032d0eea47ff1ab13e875556810ba5a6f043 100644
+index 89ec484358d369d24cfe4b9bab2a07b9fea16c5e..181efc9e8f4129253e808b295646130f3cc9bd38 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1815,7 +1815,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1810,7 +1810,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                          serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
                          serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
                          serverLevel.updateLagCompensationTick(); // Paper - lag compensation
@@ -43,7 +43,7 @@ index cfaf0db7fb1d296e8b627aa2074b37b79d75269a..ccee032d0eea47ff1ab13e875556810b
                          worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
                          /* Drop global time updates
                          if (this.tickCount % 20 == 0) {
-@@ -1860,7 +1860,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1855,7 +1855,7 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                  serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
                  serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
                  serverLevel.updateLagCompensationTick(); // Paper - lag compensation

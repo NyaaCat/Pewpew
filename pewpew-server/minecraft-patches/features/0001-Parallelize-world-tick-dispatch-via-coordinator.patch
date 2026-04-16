@@ -5,10 +5,10 @@ Subject: [PATCH] Parallelize world tick dispatch via coordinator
 
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index c2227d57ea2e2da537a313d4bfd2f8c7f776be64..89dacab667fa3dbc75547418e74f02c7f897f013 100644
+index ca2caace6aab0dfcb0ab7a0fd28e66555c62fdc5..6ad52a430fe3a27844e8ff5e1293380c11bd147d 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1804,34 +1804,81 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1799,34 +1799,81 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
          }
  
          this.isIteratingOverLevels = true; // Paper - Throw exception on world create while being ticked

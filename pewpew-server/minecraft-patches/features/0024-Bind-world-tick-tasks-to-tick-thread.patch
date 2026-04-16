@@ -5,10 +5,10 @@ Subject: [PATCH] Bind world tick tasks to tick thread
 
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index db307531205c5399318f209ff041a3e8b35272ac..cfaf0db7fb1d296e8b627aa2074b37b79d75269a 100644
+index 780c39c43866462430c647e2b9058010a0514283..89ec484358d369d24cfe4b9bab2a07b9fea16c5e 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1809,39 +1809,42 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1804,39 +1804,42 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
              for (ServerLevel serverLevel : this.getAllLevels()) {
                  final String worldKey = serverLevel.dimension().identifier().toString();
                  worldTasks.put(worldKey, () -> {

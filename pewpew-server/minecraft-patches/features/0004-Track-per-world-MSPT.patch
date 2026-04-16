@@ -5,10 +5,10 @@ Subject: [PATCH] Track per-world MSPT
 
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 89dacab667fa3dbc75547418e74f02c7f897f013..db307531205c5399318f209ff041a3e8b35272ac 100644
+index 6ad52a430fe3a27844e8ff5e1293380c11bd147d..780c39c43866462430c647e2b9058010a0514283 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1827,7 +1827,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1822,7 +1822,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                      worldProfiler.push("tick");
  
                      try {
@@ -21,7 +21,7 @@ index 89dacab667fa3dbc75547418e74f02c7f897f013..db307531205c5399318f209ff041a3e8
                      } catch (Throwable var7) {
                          CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
                          serverLevel.fillReportDetails(crashReport);
-@@ -1866,7 +1871,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1861,7 +1866,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                  profilerFiller.push("tick");
  
                  try {
