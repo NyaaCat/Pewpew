@@ -5,7 +5,7 @@ Subject: [PATCH] Wire async sensor scheduling
 
 
 diff --git a/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java b/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
-index b0c5e41fefc7c9adf1a61bd5b52861736657d37e..2783f0dde00a63ff985d4fae7a0b5f74fff89409 100644
+index 3578ece216827fd5d8c1206c689fc608e97b50df..932f1d2a7a7318a8037cca4cc678db898f3b2a44 100644
 --- a/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
 +++ b/net/minecraft/world/entity/ai/sensing/NearestLivingEntitySensor.java
 @@ -1,6 +1,7 @@
@@ -16,18 +16,18 @@ index b0c5e41fefc7c9adf1a61bd5b52861736657d37e..2783f0dde00a63ff985d4fae7a0b5f74
  import java.util.Comparator;
  import java.util.List;
  import java.util.Set;
-@@ -20,6 +21,9 @@ public class NearestLivingEntitySensor<T extends LivingEntity> extends Sensor<T>
-         List<LivingEntity> entitiesOfClass = level.getEntitiesOfClass(
-             LivingEntity.class, aabb, matchableEntity -> matchableEntity != entity && matchableEntity.isAlive()
-         );
-+        if (!entitiesOfClass.isEmpty() && AsyncSensorService.scheduleNearestLivingEntities(level, entity, entitiesOfClass, attributeValue)) {
+@@ -18,6 +19,9 @@ public class NearestLivingEntitySensor<T extends LivingEntity> extends Sensor<T>
+         double followRange = body.getAttributeValue(Attributes.FOLLOW_RANGE);
+         AABB boundingBox = body.getBoundingBox().inflate(followRange, followRange, followRange);
+         List<LivingEntity> livingEntities = level.getEntitiesOfClass(LivingEntity.class, boundingBox, mob -> mob != body && mob.isAlive());
++        if (!livingEntities.isEmpty() && AsyncSensorService.scheduleNearestLivingEntities(level, body, livingEntities, followRange)) {
 +            return;
 +        }
-         entitiesOfClass.sort(Comparator.comparingDouble(entity::distanceToSqr));
-         Brain<?> brain = entity.getBrain();
-         brain.setMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES, entitiesOfClass);
+         livingEntities.sort(Comparator.comparingDouble(body::distanceToSqr));
+         Brain<?> brain = body.getBrain();
+         brain.setMemory(MemoryModuleType.NEAREST_LIVING_ENTITIES, livingEntities);
 diff --git a/net/minecraft/world/entity/ai/sensing/PlayerSensor.java b/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
-index eb3ec4be63e1710d0ed9021eb8158d56eae89f8d..e1eb97ff3e2fd5cbf0553464ec362d54c9be44cd 100644
+index 22f58ba0bce5db69c7bcea76d40bac6079f5581a..d9cdf440c2fcfc3bdd5253682e46e68c2f961571 100644
 --- a/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
 +++ b/net/minecraft/world/entity/ai/sensing/PlayerSensor.java
 @@ -1,6 +1,7 @@
@@ -41,19 +41,19 @@ index eb3ec4be63e1710d0ed9021eb8158d56eae89f8d..e1eb97ff3e2fd5cbf0553464ec362d54
 @@ -26,12 +27,16 @@ public class PlayerSensor extends Sensor<LivingEntity> {
  
      @Override
-     protected void doTick(ServerLevel level, LivingEntity entity) {
-+        double followDistance = this.getFollowDistance(entity);
-         List<Player> list = level.players()
+     protected void doTick(final ServerLevel level, final LivingEntity body) {
++        double followDistance = this.getFollowDistance(body);
+         List<Player> players = level.players()
              .stream()
              .filter(EntitySelector.NO_SPECTATORS)
--            .filter(serverPlayer -> entity.closerThan(serverPlayer, this.getFollowDistance(entity)))
--            .sorted(Comparator.comparingDouble(entity::distanceToSqr))
-+            .filter(serverPlayer -> entity.closerThan(serverPlayer, followDistance))
+-            .filter(player -> body.closerThan(player, this.getFollowDistance(body)))
+-            .sorted(Comparator.comparingDouble(body::distanceToSqr))
++            .filter(player -> body.closerThan(player, followDistance))
              .collect(Collectors.toList());
-+        if (!list.isEmpty() && AsyncSensorService.scheduleNearestPlayers(level, entity, list, followDistance)) {
++        if (!players.isEmpty() && AsyncSensorService.scheduleNearestPlayers(level, body, players, followDistance)) {
 +            return;
 +        }
-+        list.sort(Comparator.comparingDouble(entity::distanceToSqr));
-         Brain<?> brain = entity.getBrain();
-         brain.setMemory(MemoryModuleType.NEAREST_PLAYERS, list);
-         List<Player> list1 = list.stream().filter(player -> isEntityTargetable(level, entity, player)).collect(Collectors.toList());
++        players.sort(Comparator.comparingDouble(body::distanceToSqr));
+         Brain<?> brain = body.getBrain();
+         brain.setMemory(MemoryModuleType.NEAREST_PLAYERS, players);
+         List<Player> visiblePlayers = players.stream().filter(livingEntity -> isEntityTargetable(level, body, livingEntity)).collect(Collectors.toList());

@@ -5,7 +5,7 @@ Subject: [PATCH] Harden raid omen trigger and village loss check
 
 
 diff --git a/net/minecraft/world/effect/RaidOmenMobEffect.java b/net/minecraft/world/effect/RaidOmenMobEffect.java
-index abc973e109d2d93badbcade3d3a86c4df21007f8..3f854ecc376ea98606e893ff8b4ba482dd65301f 100644
+index 12ed1d7ffacc4069e7d93efd646c0627494b964d..230321196944c3330b52a251c0dd5a471316db3e 100644
 --- a/net/minecraft/world/effect/RaidOmenMobEffect.java
 +++ b/net/minecraft/world/effect/RaidOmenMobEffect.java
 @@ -1,9 +1,12 @@
@@ -22,15 +22,15 @@ index abc973e109d2d93badbcade3d3a86c4df21007f8..3f854ecc376ea98606e893ff8b4ba482
  
  class RaidOmenMobEffect extends MobEffect {
 @@ -21,7 +24,10 @@ class RaidOmenMobEffect extends MobEffect {
-         if (entity instanceof ServerPlayer serverPlayer && !entity.isSpectator()) {
-             BlockPos raidOmenPosition = serverPlayer.getRaidOmenPosition();
+         if (mob instanceof ServerPlayer player && !mob.isSpectator()) {
+             BlockPos raidOmenPosition = player.getRaidOmenPosition();
              if (raidOmenPosition != null) {
--                level.getRaids().createOrExtendRaid(serverPlayer, raidOmenPosition);
-+                BlockPos triggerPos = this.resolveRaidTriggerPos(level, serverPlayer, raidOmenPosition);
+-                level.getRaids().createOrExtendRaid(player, raidOmenPosition);
++                BlockPos triggerPos = this.resolveRaidTriggerPos(level, player, raidOmenPosition);
 +                if (triggerPos != null) {
-+                    level.getRaids().createOrExtendRaid(serverPlayer, triggerPos);
++                    level.getRaids().createOrExtendRaid(player, triggerPos);
 +                }
-                 serverPlayer.clearRaidOmenPosition();
+                 player.clearRaidOmenPosition();
                  return false;
              }
 @@ -29,4 +35,21 @@ class RaidOmenMobEffect extends MobEffect {
@@ -56,10 +56,10 @@ index abc973e109d2d93badbcade3d3a86c4df21007f8..3f854ecc376ea98606e893ff8b4ba482
 +    }
  }
 diff --git a/net/minecraft/world/entity/raid/Raid.java b/net/minecraft/world/entity/raid/Raid.java
-index 8c6b8439bbfb8d9763767fda7985f26f14c05f3f..a6df2f01e95bf22bc1ba49c117dc916263b3ccd4 100644
+index bd40c5fecbf449d0774b3ce68c471916fc494154..783219e732659df843ab6aa63b26f81a82febcbe 100644
 --- a/net/minecraft/world/entity/raid/Raid.java
 +++ b/net/minecraft/world/entity/raid/Raid.java
-@@ -90,6 +90,7 @@ public class Raid {
+@@ -92,6 +92,7 @@ public class Raid {
      private static final int ALLOW_SPAWNING_WITHIN_VILLAGE_SECONDS_THRESHOLD = 7;
      private static final int SECTION_RADIUS_FOR_FINDING_NEW_VILLAGE_CENTER = 2;
      private static final int VILLAGE_SEARCH_RADIUS = 32;
@@ -67,15 +67,15 @@ index 8c6b8439bbfb8d9763767fda7985f26f14c05f3f..a6df2f01e95bf22bc1ba49c117dc9162
      private static final int RAID_TIMEOUT_TICKS = 48000;
      private static final int NUM_SPAWN_ATTEMPTS = 5;
      private static final Component OMINOUS_BANNER_PATTERN_NAME = Component.translatable("block.minecraft.ominous_banner");
-@@ -126,6 +127,7 @@ public class Raid {
+@@ -130,6 +131,7 @@ public class Raid {
      public int numGroups;
      private Raid.RaidStatus status;
      private int celebrationTicks;
 +    private int ticksOutsideVillage;
      private Optional<BlockPos> waveSpawnPos = Optional.empty();
  
-     public Raid(BlockPos center, Difficulty difficulty) {
-@@ -297,18 +299,24 @@ public class Raid {
+     public Raid(final BlockPos center, final Difficulty difficulty) {
+@@ -301,18 +303,24 @@ public class Raid {
                      return;
                  }
  

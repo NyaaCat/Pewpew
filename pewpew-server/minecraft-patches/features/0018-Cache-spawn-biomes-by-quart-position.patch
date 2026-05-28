@@ -5,10 +5,10 @@ Subject: [PATCH] Cache spawn biomes by quart position
 
 
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 59010f2e0ddf4d7cae2606cba6b7dd7c5353d49c..aefd696667351fe9d09857e742120193e302b048 100644
+index c322ce879795a6d530680568c7dcf499b21a38a4..011e53a4512d709350e1fe77c92ba24eca6cde8d 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -726,15 +726,18 @@ public final class NaturalSpawner {
+@@ -757,15 +757,18 @@ public final class NaturalSpawner {
              if (!this.contains(pos)) {
                  return this.level.getBiome(pos);
              }

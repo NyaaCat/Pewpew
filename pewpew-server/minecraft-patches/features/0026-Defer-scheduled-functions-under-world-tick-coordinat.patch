@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Thu, 29 Jan 2026 03:55:00 +0000
+Subject: [PATCH] Defer scheduled functions under world tick coordinator
+
+
+diff --git a/net/minecraft/world/level/timers/FunctionCallback.java b/net/minecraft/world/level/timers/FunctionCallback.java
+index e4cb4782dde4c4cb0a198920106709bef0d86d43..5364f183cc47fa6317390af883212e76c511c25b 100644
+--- a/net/minecraft/world/level/timers/FunctionCallback.java
++++ b/net/minecraft/world/level/timers/FunctionCallback.java
+@@ -17,7 +17,15 @@ public record FunctionCallback(Identifier functionId) implements TimerCallback<M
+     public void handle(final MinecraftServer server, final TimerQueue<MinecraftServer> queue, final long time) {
+         ServerFunctionManager functionManager = server.getFunctions();
+         functionManager.get(this.functionId)
+-            .ifPresent(function -> functionManager.execute((CommandFunction<CommandSourceStack>)function, functionManager.getGameLoopSender()));
++            .ifPresent(function -> {
++                final Runnable execute = () -> functionManager.execute((CommandFunction<CommandSourceStack>)function, functionManager.getGameLoopSender());
++                if (io.papermc.paper.pewpew.WorldTickCoordinator.isEnabled()
++                    && !io.papermc.paper.util.MCUtil.isMainServerThread()) {
++                    io.papermc.paper.pewpew.WorldTickCoordinator.get().enqueueGlobalCommit(execute);
++                    return;
++                }
++                execute.run();
++            });
+     }
+ 
+     @Override

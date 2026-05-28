@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@local>
+Date: Tue, 27 Jan 2026 10:15:00 +0000
+Subject: [PATCH] Serialize command execution under world tick coordinator
+
+
+diff --git a/net/minecraft/commands/Commands.java b/net/minecraft/commands/Commands.java
+index 01a9a01db6908c2f6c511be4628f518ce6a16de7..120bce215dce6b9721906b2ef6b57f756a0eae50 100644
+--- a/net/minecraft/commands/Commands.java
++++ b/net/minecraft/commands/Commands.java
+@@ -19,6 +19,7 @@ import java.util.HashMap;
+ import java.util.Map;
+ import java.util.Optional;
+ import java.util.Set;
++import java.util.concurrent.locks.ReentrantLock;
+ import java.util.function.Consumer;
+ import java.util.function.Predicate;
+ import java.util.function.UnaryOperator;
+@@ -160,6 +161,7 @@ public class Commands {
+     public static final String COMMAND_PREFIX = "/";
+     private static final ThreadLocal<@Nullable ExecutionContext<CommandSourceStack>> CURRENT_EXECUTION_CONTEXT = new ThreadLocal<>();
+     private static final Logger LOGGER = LogUtils.getLogger();
++    private static final ReentrantLock COMMAND_EXECUTION_LOCK = new ReentrantLock();
+     public static final PermissionCheck LEVEL_ALL = PermissionCheck.AlwaysPass.INSTANCE;
+     public static final PermissionCheck LEVEL_MODERATORS = new PermissionCheck.Require(Permissions.COMMANDS_MODERATOR);
+     public static final PermissionCheck LEVEL_GAMEMASTERS = new PermissionCheck.Require(Permissions.COMMANDS_GAMEMASTER);
+@@ -455,22 +457,32 @@ public class Commands {
+     }
+ 
+     public static void executeCommandInContext(final CommandSourceStack context, final Consumer<ExecutionContext<CommandSourceStack>> config) {
+-        ExecutionContext<CommandSourceStack> currentContext = CURRENT_EXECUTION_CONTEXT.get();
+-        boolean isTopContext = currentContext == null;
+-        if (isTopContext) {
+-            GameRules gameRules = context.getLevel().getGameRules();
+-            int chainLimit = Math.max(1, gameRules.get(GameRules.MAX_COMMAND_SEQUENCE_LENGTH));
+-            int forkLimit = gameRules.get(GameRules.MAX_COMMAND_FORKS);
+-
+-            try (ExecutionContext<CommandSourceStack> executionContext = new ExecutionContext<>(chainLimit, forkLimit, Profiler.get())) {
+-                CURRENT_EXECUTION_CONTEXT.set(executionContext);
+-                config.accept(executionContext);
+-                executionContext.runCommandQueue();
+-            } finally {
+-                CURRENT_EXECUTION_CONTEXT.set(null);
++        final boolean lock = io.papermc.paper.pewpew.WorldTickCoordinator.isEnabled();
++        if (lock) {
++            COMMAND_EXECUTION_LOCK.lock();
++        }
++        try {
++            ExecutionContext<CommandSourceStack> currentContext = CURRENT_EXECUTION_CONTEXT.get();
++            boolean isTopContext = currentContext == null;
++            if (isTopContext) {
++                GameRules gameRules = context.getLevel().getGameRules();
++                int chainLimit = Math.max(1, gameRules.get(GameRules.MAX_COMMAND_SEQUENCE_LENGTH));
++                int forkLimit = gameRules.get(GameRules.MAX_COMMAND_FORKS);
++
++                try (ExecutionContext<CommandSourceStack> executionContext = new ExecutionContext<>(chainLimit, forkLimit, Profiler.get())) {
++                    CURRENT_EXECUTION_CONTEXT.set(executionContext);
++                    config.accept(executionContext);
++                    executionContext.runCommandQueue();
++                } finally {
++                    CURRENT_EXECUTION_CONTEXT.set(null);
++                }
++            } else {
++                config.accept(currentContext);
++            }
++        } finally {
++            if (lock) {
++                COMMAND_EXECUTION_LOCK.unlock();
+             }
+-        } else {
+-            config.accept(currentContext);
+         }
+     }
+ 

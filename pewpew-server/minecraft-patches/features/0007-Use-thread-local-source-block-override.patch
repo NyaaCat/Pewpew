@@ -5,16 +5,16 @@ Subject: [PATCH] Use thread-local source block override
 
 
 diff --git a/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java b/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
-index ab7be4298be22af32c4726f178b93896b96f599d..82124fa1986a20b7f25a1e012512d1f21994f3c6 100644
+index e75fb2e83c58de051672c8edaf89c7cb8a68cac8..c273d2804bf0602c0762a6b779ff882cab68e602 100644
 --- a/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/SculkCatalystBlockEntity.java
 @@ -44,9 +44,9 @@ public class SculkCatalystBlockEntity extends BlockEntity implements GameEventLi
      // Paper end - Fix NPE in SculkBloomEvent world access
  
-     public static void serverTick(Level level, BlockPos pos, BlockState state, SculkCatalystBlockEntity sculkCatalyst) {
--        org.bukkit.craftbukkit.event.CraftEventFactory.sourceBlockOverride = sculkCatalyst.getBlockPos(); // CraftBukkit - SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPosition up to five methods deep.
-+        org.bukkit.craftbukkit.event.CraftEventFactory.sourceBlockOverrideRT.set(sculkCatalyst.getBlockPos()); // CraftBukkit - SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPosition up to five methods deep.
-         sculkCatalyst.catalystListener.getSculkSpreader().updateCursors(level, pos, level.getRandom(), true);
+     public static void serverTick(final Level level, final BlockPos pos, final BlockState state, final SculkCatalystBlockEntity entity) {
+-        org.bukkit.craftbukkit.event.CraftEventFactory.sourceBlockOverride = entity.getBlockPos(); // CraftBukkit - SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPos up to five methods deep.
++        org.bukkit.craftbukkit.event.CraftEventFactory.sourceBlockOverrideRT.set(entity.getBlockPos()); // CraftBukkit - SPIGOT-7068: Add source block override, not the most elegant way but better than passing down a BlockPos up to five methods deep.
+         entity.catalystListener.getSculkSpreader().updateCursors(level, pos, level.getRandom(), true);
 -        org.bukkit.craftbukkit.event.CraftEventFactory.sourceBlockOverride = null; // CraftBukkit
 +        org.bukkit.craftbukkit.event.CraftEventFactory.sourceBlockOverrideRT.remove(); // CraftBukkit
      }

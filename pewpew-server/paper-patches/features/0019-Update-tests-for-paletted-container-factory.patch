@@ -5,10 +5,10 @@ Subject: [PATCH] Update tests for paletted container factory
 
 
 diff --git a/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java b/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
-index 88fe71598a141f666cee6a0f4c8cad4758638284..4c80424f5de8b8dfb072aaa4cd34312a72fbab3d 100644
+index 88fe71598a141f666cee6a0f4c8cad4758638284..3ceefbbffbab095505d841cfc02e3a9d73d555f3 100644
 --- a/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
 +++ b/src/test/java/io/papermc/paper/pewpew/LevelChunkSectionVersionTest.java
-@@ -3,23 +3,17 @@ package io.papermc.paper.pewpew;
+@@ -3,23 +3,18 @@ package io.papermc.paper.pewpew;
  import static org.junit.jupiter.api.Assertions.assertEquals;
  import static org.junit.jupiter.api.Assertions.assertTrue;
  
@@ -23,6 +23,7 @@ index 88fe71598a141f666cee6a0f4c8cad4758638284..4c80424f5de8b8dfb072aaa4cd34312a
 -import net.minecraft.world.level.biome.MobSpawnSettings;
  import net.minecraft.world.level.block.Blocks;
  import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.PalettedContainerFactory;
 +import org.bukkit.support.RegistryHelper;
 +import org.bukkit.support.environment.Normal;
  import org.junit.jupiter.api.Test;
@@ -32,11 +33,11 @@ index 88fe71598a141f666cee6a0f4c8cad4758638284..4c80424f5de8b8dfb072aaa4cd34312a
      @Test
      public void changeVersionIncrementsOnMutation() {
 -        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
-+        LevelChunkSection section = new LevelChunkSection(RegistryHelper.context().palettedContainerFactory().get());
++        LevelChunkSection section = new LevelChunkSection(PalettedContainerFactory.create(RegistryHelper.registryAccess()));
          long initial = section.getChangeVersion();
  
          section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
-@@ -34,23 +28,4 @@ public class LevelChunkSectionVersionTest {
+@@ -34,23 +29,4 @@ public class LevelChunkSectionVersionTest {
          long afterSecond = section.getChangeVersion();
          assertTrue(afterSecond > afterSame, "expected change version to increment on state change");
      }
@@ -63,10 +64,10 @@ index 88fe71598a141f666cee6a0f4c8cad4758638284..4c80424f5de8b8dfb072aaa4cd34312a
 \ No newline at end of file
 +}
 diff --git a/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java b/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
-index ad6801402de99daaa335ca31255b033e53dc1bbc..97f98a3fba3a6b1d8fe63dc781e17b3f02826775 100644
+index ad6801402de99daaa335ca31255b033e53dc1bbc..637aef3c464e0871f8297dde660a64d3029e9efa 100644
 --- a/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
 +++ b/src/test/java/io/papermc/paper/pewpew/SnapshotPathNavigationRegionTest.java
-@@ -6,23 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
+@@ -6,23 +6,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  import static org.mockito.Mockito.mock;
  import static org.mockito.Mockito.when;
  
@@ -86,30 +87,31 @@ index ad6801402de99daaa335ca31255b033e53dc1bbc..97f98a3fba3a6b1d8fe63dc781e17b3f
  import net.minecraft.world.level.block.Blocks;
  import net.minecraft.world.level.chunk.LevelChunk;
  import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.PalettedContainerFactory;
  import net.minecraft.world.level.pathfinder.SnapshotPathNavigationRegion;
 +import org.bukkit.support.RegistryHelper;
  import org.bukkit.support.environment.Normal;
  import org.junit.jupiter.api.Test;
  
-@@ -30,7 +22,7 @@ import org.junit.jupiter.api.Test;
+@@ -30,7 +23,7 @@ import org.junit.jupiter.api.Test;
  class SnapshotPathNavigationRegionTest {
      @Test
      void snapshotDetectsSectionChanges() {
 -        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
-+        LevelChunkSection section = new LevelChunkSection(RegistryHelper.context().palettedContainerFactory().get());
++        LevelChunkSection section = new LevelChunkSection(PalettedContainerFactory.create(RegistryHelper.registryAccess()));
          section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
  
          LevelChunk chunk = mockChunk(section);
-@@ -50,7 +42,7 @@ class SnapshotPathNavigationRegionTest {
+@@ -50,7 +43,7 @@ class SnapshotPathNavigationRegionTest {
  
      @Test
      void snapshotUsesCopiedStates() {
 -        LevelChunkSection section = new LevelChunkSection(buildTestBiomeRegistry());
-+        LevelChunkSection section = new LevelChunkSection(RegistryHelper.context().palettedContainerFactory().get());
++        LevelChunkSection section = new LevelChunkSection(PalettedContainerFactory.create(RegistryHelper.registryAccess()));
          section.setBlockState(0, 0, 0, Blocks.DIRT.defaultBlockState());
  
          LevelChunk chunk = mockChunk(section);
-@@ -90,22 +82,4 @@ class SnapshotPathNavigationRegionTest {
+@@ -90,22 +83,4 @@ class SnapshotPathNavigationRegionTest {
          return level;
      }
  

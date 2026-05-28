@@ -5,7 +5,7 @@ Subject: [PATCH] Async path service plumbing
 
 
 diff --git a/net/minecraft/server/commands/DebugPathCommand.java b/net/minecraft/server/commands/DebugPathCommand.java
-index f6de87e53362b522ab69af1b8a0f92a768c1d966..ca2339dab8988f05005fa0543e8ce3e7f5e8aa2b 100644
+index 1e023d79b1da9b4d02a31d60a8464f0d84dae0c1..c3f55f60aa7cd09de51a5dee3e8360b068538887 100644
 --- a/net/minecraft/server/commands/DebugPathCommand.java
 +++ b/net/minecraft/server/commands/DebugPathCommand.java
 @@ -11,11 +11,13 @@ import net.minecraft.network.chat.Component;
@@ -21,18 +21,18 @@ index f6de87e53362b522ab69af1b8a0f92a768c1d966..ca2339dab8988f05005fa0543e8ce3e7
 +    private static final SimpleCommandExceptionType ERROR_PENDING = new SimpleCommandExceptionType(Component.literal("Path pending"));
      private static final SimpleCommandExceptionType ERROR_NOT_COMPLETE = new SimpleCommandExceptionType(Component.literal("Target not reached"));
  
-     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-@@ -37,6 +39,8 @@ public class DebugPathCommand {
-             Path path = pathNavigation.createPath(pos, 0);
+     public static void register(final CommandDispatcher<CommandSourceStack> dispatcher) {
+@@ -36,6 +38,8 @@ public class DebugPathCommand {
+             Path path = pathNavigation.createPath(target, 0);
              if (path == null) {
                  throw ERROR_NO_PATH.create();
 +            } else if (AsyncPath.isPending(path)) {
 +                throw ERROR_PENDING.create();
-             } else if (!path.canReach()) {
-                 throw ERROR_NOT_COMPLETE.create();
-             } else {
+             }
+ 
+             if (!path.canReach()) {
 diff --git a/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java b/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
-index 5ccc526adb65b2107afd944a52c1246738b4bcad..2289940c12307ccfb147bc56e00a818a73bfc880 100644
+index 2d0531aed8a3274d8673b0950eb284101d933755..97d36de3a7d3be008cd8a17c340f2d8115f5427c 100644
 --- a/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/GroundPathNavigation.java
 @@ -10,6 +10,7 @@ import net.minecraft.world.level.Level;
@@ -54,7 +54,7 @@ index 5ccc526adb65b2107afd944a52c1246738b4bcad..2289940c12307ccfb147bc56e00a818a
          if (this.avoidSun) {
              if (this.level.canSeeSky(BlockPos.containing(this.mob.getX(), this.mob.getY() + 0.5, this.mob.getZ()))) {
 diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
-index c98f2f2902db2829a8cc60d09558461c0cbfe9b6..785febb46109b3057e6ad690897219ca29d71a03 100644
+index 1c6e10fdeb05fdc5ec2746f5005e4dadbb3dea96..8de22cf2036ea43ccf2254e87ed0e98fbbded0cd 100644
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 @@ -20,6 +20,8 @@ import net.minecraft.world.level.ClipContext;
@@ -66,59 +66,59 @@ index c98f2f2902db2829a8cc60d09558461c0cbfe9b6..785febb46109b3057e6ad690897219ca
  import net.minecraft.world.level.pathfinder.Node;
  import net.minecraft.world.level.pathfinder.NodeEvaluator;
  import net.minecraft.world.level.pathfinder.Path;
-@@ -189,6 +191,20 @@ public abstract class PathNavigation {
-             profilerFiller.push("pathfind");
-             BlockPos blockPos = offsetUpward ? this.mob.blockPosition().above() : this.mob.blockPosition();
-             int i = (int)(followRange + regionOffset);
-+            if (this.level instanceof ServerLevel serverLevel) {
-+                Path asyncPath = AsyncPathService.schedule(serverLevel, this.mob, this, targets, blockPos, i, accuracy, followRange);
-+                if (asyncPath != null) {
-+                    profilerFiller.pop();
-+                    this.targetPos = asyncPath.getTarget();
-+                    this.reachRange = accuracy;
-+                    this.resetStuckTimeout();
-+                    return asyncPath;
-+                }
-+                if (AsyncPathService.shouldSkipSyncFallback(this.mob)) {
-+                    profilerFiller.pop();
-+                    return null;
-+                }
+@@ -196,6 +198,20 @@ public abstract class PathNavigation {
+         profiler.push("pathfind");
+         BlockPos fromPos = above ? this.mob.blockPosition().above() : this.mob.blockPosition();
+         int radius = (int)(maxPathLength + radiusOffset);
++        if (this.level instanceof ServerLevel serverLevel) {
++            Path asyncPath = AsyncPathService.schedule(serverLevel, this.mob, this, targets, fromPos, radius, reachRange, maxPathLength);
++            if (asyncPath != null) {
++                profiler.pop();
++                this.targetPos = asyncPath.getTarget();
++                this.reachRange = reachRange;
++                this.resetStuckTimeout();
++                return asyncPath;
 +            }
-             PathNavigationRegion pathNavigationRegion = new PathNavigationRegion(this.level, blockPos.offset(-i, -i, -i), blockPos.offset(i, i, i));
-             Path path = this.pathFinder.findPath(pathNavigationRegion, this.mob, targets, followRange, reachRange, this.maxVisitedNodesMultiplier);
-             profilerFiller.pop();
-@@ -244,6 +260,14 @@ public abstract class PathNavigation {
-                 this.path = path;
-             }
++            if (AsyncPathService.shouldSkipSyncFallback(this.mob)) {
++                profiler.pop();
++                return null;
++            }
++        }
+         PathNavigationRegion region = new PathNavigationRegion(this.level, fromPos.offset(-radius, -radius, -radius), fromPos.offset(radius, radius, radius));
+         Path path = this.pathFinder.findPath(region, this.mob, targets, maxPathLength, reachRange, this.maxVisitedNodesMultiplier);
+         profiler.pop();
+@@ -251,6 +267,14 @@ public abstract class PathNavigation {
+             this.path = newPath;
+         }
  
-+            if (AsyncPath.isPending(pathentity)) {
-+                this.speedModifier = speed;
-+                Vec3 tempMobPos = this.getTempMobPos();
-+                this.lastStuckCheck = this.tick;
-+                this.lastStuckCheckPos = tempMobPos;
-+                return true;
-+            }
++        if (AsyncPath.isPending(newPath)) {
++            this.speedModifier = speedModifier;
++            Vec3 mobPos = this.getTempMobPos();
++            this.lastStuckCheck = this.tick;
++            this.lastStuckCheckPos = mobPos;
++            return true;
++        }
 +
-             if (this.isDone()) {
-                 return false;
-             } else {
-@@ -265,6 +289,15 @@ public abstract class PathNavigation {
+         if (this.isDone()) {
+             return false;
+         }
+@@ -271,6 +295,15 @@ public abstract class PathNavigation {
          return this.path;
      }
  
-+    public void applyAsyncPath(AsyncPath asyncPath, Path path, int accuracy) {
++    public void applyAsyncPath(final AsyncPath asyncPath, final Path path, final int reachRange) {
 +        if (this.path != asyncPath) {
 +            return;
 +        }
 +        this.targetPos = path.getTarget();
-+        this.reachRange = accuracy;
++        this.reachRange = reachRange;
 +        this.resetStuckTimeout();
 +    }
 +
      public void tick() {
          this.tick++;
          if (this.hasDelayedRecomputation) {
-@@ -272,6 +305,9 @@ public abstract class PathNavigation {
+@@ -278,6 +311,9 @@ public abstract class PathNavigation {
          }
  
          if (!this.isDone()) {
@@ -128,7 +128,7 @@ index c98f2f2902db2829a8cc60d09558461c0cbfe9b6..785febb46109b3057e6ad690897219ca
              if (this.canUpdatePath()) {
                  this.followThePath();
              } else if (this.path != null && !this.path.isDone()) {
-@@ -403,6 +439,9 @@ public abstract class PathNavigation {
+@@ -408,6 +444,9 @@ public abstract class PathNavigation {
      protected abstract boolean canUpdatePath();
  
      protected void trimPath() {

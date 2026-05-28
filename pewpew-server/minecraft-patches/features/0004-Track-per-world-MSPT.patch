@@ -5,40 +5,40 @@ Subject: [PATCH] Track per-world MSPT
 
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index 6ad52a430fe3a27844e8ff5e1293380c11bd147d..780c39c43866462430c647e2b9058010a0514283 100644
+index f142cf80d2458c36e492143db4cb551955ed767b..643f75193f58854adfc935523da9639d335174ed 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1822,7 +1822,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+@@ -1852,7 +1852,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
                      worldProfiler.push("tick");
  
                      try {
 +                        long start = Util.getNanos(); // Pewpew - track per-world MSPT
-                         serverLevel.tick(hasTimeLeft);
+                         level.tick(haveTime);
 +                        long elapsed = Util.getNanos() - start; // Pewpew - track per-world MSPT
-+                        serverLevel.tickTimes5s.add(this.tickCount, elapsed);
-+                        serverLevel.tickTimes10s.add(this.tickCount, elapsed);
-+                        serverLevel.tickTimes1m.add(this.tickCount, elapsed);
-                     } catch (Throwable var7) {
-                         CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
-                         serverLevel.fillReportDetails(crashReport);
-@@ -1861,7 +1866,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
-                 profilerFiller.push("tick");
++                        level.tickTimes5s.add(this.tickCount, elapsed);
++                        level.tickTimes10s.add(this.tickCount, elapsed);
++                        level.tickTimes1m.add(this.tickCount, elapsed);
+                     } catch (Throwable t) {
+                         CrashReport report = CrashReport.forThrowable(t, "Exception ticking world");
+                         level.fillReportDetails(report);
+@@ -1884,7 +1889,12 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+                 profiler.push("tick");
  
                  try {
 +                    long start = Util.getNanos(); // Pewpew - track per-world MSPT
-                     serverLevel.tick(hasTimeLeft);
+                     level.tick(haveTime);
 +                    long elapsed = Util.getNanos() - start; // Pewpew - track per-world MSPT
-+                    serverLevel.tickTimes5s.add(this.tickCount, elapsed);
-+                    serverLevel.tickTimes10s.add(this.tickCount, elapsed);
-+                    serverLevel.tickTimes1m.add(this.tickCount, elapsed);
-                 } catch (Throwable var7) {
-                     CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
-                     serverLevel.fillReportDetails(crashReport);
++                    level.tickTimes5s.add(this.tickCount, elapsed);
++                    level.tickTimes10s.add(this.tickCount, elapsed);
++                    level.tickTimes1m.add(this.tickCount, elapsed);
+                 } catch (Throwable t) {
+                     CrashReport report = CrashReport.forThrowable(t, "Exception ticking world");
+                     level.fillReportDetails(report);
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index dc65503a2d785d64d37b76b0303f51cf66d9769a..cf574b16cca17f7ff24583acc88d5666aecf7697 100644
+index 229ff740e0418a05d824a67401ae6f105b4c3642..88f4ea38db72289158518978ae17d9ddfc071d25 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -598,6 +598,12 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+@@ -604,6 +604,12 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
      }
      // Paper end - chunk tick iteration
  
@@ -49,5 +49,5 @@ index dc65503a2d785d64d37b76b0303f51cf66d9769a..cf574b16cca17f7ff24583acc88d5666
 +    // Pewpew end
 +
      public ServerLevel(
-         MinecraftServer server,
-         Executor dispatcher,
+         final MinecraftServer server,
+         final Executor executor,

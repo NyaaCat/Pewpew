@@ -5,10 +5,10 @@ Subject: [PATCH] Guard tracker tick against null entities
 
 
 diff --git a/net/minecraft/server/level/ChunkMap.java b/net/minecraft/server/level/ChunkMap.java
-index ab8893163ac85971a470e4a4d6fa76bd174e2bae..0f7fa0db38a0e7b26eb6bd4d9a911cb92afd6e37 100644
+index 42ec67c53c35189838ce4767c2be620e05108159..92d7534cd2838c3a5e705bdcc9fd1c2f23f55392 100644
 --- a/net/minecraft/server/level/ChunkMap.java
 +++ b/net/minecraft/server/level/ChunkMap.java
-@@ -1046,9 +1046,15 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+@@ -1040,9 +1040,15 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
          final ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup entityLookup = (ca.spottedleaf.moonrise.patches.chunk_system.level.entity.server.ServerEntityLookup)((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemServerLevel)this.level).moonrise$getEntityLookup();;
  
          final ca.spottedleaf.moonrise.common.list.ReferenceList<net.minecraft.world.entity.Entity> trackerEntities = entityLookup.trackerEntities;

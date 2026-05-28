@@ -4,97 +4,22 @@ Date: Tue, 20 Jan 2026 02:52:19 +0000
 Subject: [PATCH] Fix async pathing compat for 1.21.11
 
 
-diff --git a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-index a42c5e6617a5aa8f346655c5d8a4dcbddca9fb94..fdc63a5875ab87b05b35decfef28359ae86f7a89 100644
---- a/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-+++ b/net/minecraft/world/entity/ai/behavior/AcquirePoi.java
-@@ -130,7 +130,7 @@ public class AcquirePoi {
-                                                 mob.getBrain().setMemory(acquiringMemory, GlobalPos.of(level.dimension(), target));
-                                                 entityEventId.ifPresent(id -> level.broadcastEntityEvent(mob, id));
-                                                 map.clear();
--                                                DebugPackets.sendPoiTicketCountPacket(level, target);
-+                                                level.debugSynchronizers().updatePoi(target);
-                                             });
-                                         } else {
-                                             long now = level.getGameTime();
-diff --git a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
-index 4069d7311f0106515ad4b67ceedcc5d55cc01eb4..ce74b70bbd6ba3b0d993d7d0ceb7171228cd7521 100644
---- a/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
-+++ b/net/minecraft/world/entity/ai/behavior/SetClosestHomeAsWalkTarget.java
-@@ -89,7 +89,7 @@ public class SetClosestHomeAsWalkTarget {
-                                                 Optional<Holder<PoiType>> type = poiManager.getType(target);
-                                                 if (type.isPresent()) {
-                                                     mob.getBrain().setMemory(MemoryModuleType.WALK_TARGET, new WalkTarget(target, speedModifier, 1));
--                                                    DebugPackets.sendPoiTicketCountPacket(level, target);
-+                                                    level.debugSynchronizers().updatePoi(target);
-                                                 }
-                                             } else if (mutableInt.getValue() < 5) {
-                                                 map.long2LongEntrySet().removeIf(entry -> entry.getLongValue() < mutableLong.getValue());
 diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
-index 785febb46109b3057e6ad690897219ca29d71a03..2470cc3f9d226933ad612eca16161c0b3e57126c 100644
+index 8de22cf2036ea43ccf2254e87ed0e98fbbded0cd..db2c5a8f87e068c147926b691c0306d3a19b3966 100644
 --- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
 +++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
-@@ -192,11 +192,11 @@ public abstract class PathNavigation {
-             BlockPos blockPos = offsetUpward ? this.mob.blockPosition().above() : this.mob.blockPosition();
-             int i = (int)(followRange + regionOffset);
-             if (this.level instanceof ServerLevel serverLevel) {
--                Path asyncPath = AsyncPathService.schedule(serverLevel, this.mob, this, targets, blockPos, i, accuracy, followRange);
-+                Path asyncPath = AsyncPathService.schedule(serverLevel, this.mob, this, targets, blockPos, i, reachRange, followRange);
-                 if (asyncPath != null) {
-                     profilerFiller.pop();
-                     this.targetPos = asyncPath.getTarget();
--                    this.reachRange = accuracy;
-+                    this.reachRange = reachRange;
-                     this.resetStuckTimeout();
-                     return asyncPath;
-                 }
-@@ -260,8 +260,8 @@ public abstract class PathNavigation {
-                 this.path = path;
-             }
- 
--            if (AsyncPath.isPending(pathentity)) {
--                this.speedModifier = speed;
-+            if (AsyncPath.isPending(path)) {
-+                this.speedModifier = speedModifier;
-                 Vec3 tempMobPos = this.getTempMobPos();
-                 this.lastStuckCheck = this.tick;
-                 this.lastStuckCheckPos = tempMobPos;
-@@ -290,9 +290,10 @@ public abstract class PathNavigation {
+@@ -296,9 +296,10 @@ public abstract class PathNavigation {
      }
  
-     public void applyAsyncPath(AsyncPath asyncPath, Path path, int accuracy) {
+     public void applyAsyncPath(final AsyncPath asyncPath, final Path path, final int reachRange) {
 -        if (this.path != asyncPath) {
 +        if (this.path != asyncPath.pendingPath()) {
              return;
          }
 +        this.path = path;
          this.targetPos = path.getTarget();
-         this.reachRange = accuracy;
+         this.reachRange = reachRange;
          this.resetStuckTimeout();
-diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index 4b357c58f4966d3cd5327b273b30445cbfc8f1d8..0581d6564f88b1ed9da58b28793277697fdfffb4 100644
---- a/net/minecraft/world/level/NaturalSpawner.java
-+++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -31,6 +31,7 @@ import net.minecraft.util.VisibleForDebug;
- import net.minecraft.util.profiling.Profiler;
- import net.minecraft.util.profiling.ProfilerFiller;
- import net.minecraft.util.random.WeightedList;
-+import net.minecraft.world.attribute.EnvironmentAttributeReader;
- import net.minecraft.world.flag.FeatureFlagSet;
- import net.minecraft.world.entity.Entity;
- import net.minecraft.world.entity.EntitySpawnReason;
-@@ -865,6 +866,11 @@ public final class NaturalSpawner {
-             return this.level.enabledFeatures();
-         }
- 
-+        @Override
-+        public EnvironmentAttributeReader environmentAttributes() {
-+            return this.level.environmentAttributes();
-+        }
-+
-         @Override
-         public boolean isClientSide() {
-             return this.level.isClientSide();
 diff --git a/net/minecraft/world/level/pathfinder/AsyncPath.java b/net/minecraft/world/level/pathfinder/AsyncPath.java
 index fd30f658034d91f0623988bbafd1bceaee60160a..76beb0c901a5947939e8f3887c9333a321c89434 100644
 --- a/net/minecraft/world/level/pathfinder/AsyncPath.java

@@ -26,18 +26,18 @@ index 314cb08dd0af4a4abc3db4368df731cfe06a1df7..a6dccc500250f5a2324a0efa75c792d3
  
          Main.main(options);
 diff --git a/src/main/java/org/bukkit/craftbukkit/CraftServer.java b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-index dd58f31e94ce36fb75a8b151d6fa29c6f365c529..244467c6e7bb8021a596b4a31e792b927864180a 100644
+index dfc4aa30ff3ffe7c888f4e4c3e1509e9346bb8e1..a54e1b9af234c45b9ecdd18d3e08844600cd570c 100644
 --- a/src/main/java/org/bukkit/craftbukkit/CraftServer.java
 +++ b/src/main/java/org/bukkit/craftbukkit/CraftServer.java
-@@ -15,6 +15,7 @@ import com.mojang.serialization.Lifecycle;
+@@ -13,6 +13,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
  import io.papermc.paper.configuration.GlobalConfiguration;
  import io.papermc.paper.configuration.PaperServerConfiguration;
  import io.papermc.paper.configuration.ServerConfiguration;
 +import io.papermc.paper.pewpew.PewpewConfig;
  import io.papermc.paper.pewpew.WorldTickCoordinator;
  import io.papermc.paper.world.PaperWorldLoader;
- import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
-@@ -992,6 +993,7 @@ public final class CraftServer implements Server {
+ import io.papermc.paper.world.migration.WorldFolderMigration;
+@@ -990,6 +991,7 @@ public final class CraftServer implements Server {
          }
  
          org.spigotmc.SpigotConfig.init((File) this.console.options.valueOf("spigot-settings")); // Spigot

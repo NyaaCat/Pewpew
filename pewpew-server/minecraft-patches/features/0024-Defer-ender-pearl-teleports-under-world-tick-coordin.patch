@@ -1,0 +1,130 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Mon, 26 Jan 2026 15:09:12 +0000
+Subject: [PATCH] Defer ender pearl teleports under world tick coordinator
+
+
+diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
+index cd0191ab65e7d829cfa055fe8978ea14c14a3bfe..94c85d94b6dc3069649ee7d4297d60e7c770e469 100644
+--- a/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
++++ b/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEnderpearl.java
+@@ -99,6 +99,8 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+         if (this.level() instanceof ServerLevel level && !this.isRemoved()) {
+             Entity owner = this.getOwner();
+             if (owner != null && isAllowedToTeleportOwner(owner, level)) {
++                final boolean deferTeleport = io.papermc.paper.pewpew.WorldTickCoordinator.isEnabled()
++                    && !io.papermc.paper.util.MCUtil.isMainServerThread();
+                 Vec3 teleportPos = this.oldPosition();
+                 if (owner instanceof ServerPlayer player) {
+                     if (player.connection.isAcceptingMessages()) {
+@@ -106,53 +108,74 @@ public class ThrownEnderpearl extends ThrowableItemProjectile {
+                         // Store pre teleportation position as the teleport has been moved up.
+                         final double preTeleportX = player.getX(), preTeleportY = player.getY(), preTeleportZ = player.getZ();
+                         final float preTeleportYRot = player.getYRot(), preTeleportXRot = player.getXRot();
+-                        ServerPlayer newOwner = player.teleport(new TeleportTransition(
+-                            level, teleportPos, Vec3.ZERO, 0.0F, 0.0F, Relative.union(Relative.ROTATION, Relative.DELTA), TeleportTransition.DO_NOTHING, org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.ENDER_PEARL));
+-                        if (newOwner == null) {
+-                            this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT);
+-                            return;
+-                        }
+-                        // CraftBukkit end
+-                        if (this.random.nextFloat() < 0.05F && level.isSpawningMonsters()) {
+-                            Endermite endermite = EntityType.ENDERMITE.create(level, EntitySpawnReason.TRIGGERED);
+-                            if (endermite != null) {
+-                                endermite.snapTo(preTeleportX, preTeleportY, preTeleportZ, preTeleportYRot, preTeleportXRot); // Paper - spawn endermite at pre teleport position as teleport has been moved up
+-                                level.addFreshEntity(endermite, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.ENDER_PEARL); // Paper - add reason
++                        final boolean spawnEndermite = this.random.nextFloat() < 0.05F && level.isSpawningMonsters();
++                        final boolean portalCooldown = this.isOnPortalCooldown();
++                        final Runnable teleportTask = () -> {
++                            if (!isAllowedToTeleportOwner(player, level) || !player.connection.isAcceptingMessages()) {
++                                return;
++                            }
++                            ServerPlayer newOwner = player.teleport(new TeleportTransition(
++                                level, teleportPos, Vec3.ZERO, 0.0F, 0.0F, Relative.union(Relative.ROTATION, Relative.DELTA), TeleportTransition.DO_NOTHING, org.bukkit.event.player.PlayerTeleportEvent.TeleportCause.ENDER_PEARL));
++                            if (newOwner == null) {
++                                return;
++                            }
++                            // CraftBukkit end
++                            if (spawnEndermite) {
++                                Endermite endermite = EntityType.ENDERMITE.create(level, EntitySpawnReason.TRIGGERED);
++                                if (endermite != null) {
++                                    endermite.snapTo(preTeleportX, preTeleportY, preTeleportZ, preTeleportYRot, preTeleportXRot); // Paper - spawn endermite at pre teleport position as teleport has been moved up
++                                    level.addFreshEntity(endermite, org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason.ENDER_PEARL); // Paper - add reason
++                                }
+                             }
+-                        }
+ 
+-                        if (this.isOnPortalCooldown()) {
+-                            owner.setPortalCooldown();
+-                        }
++                            if (portalCooldown) {
++                                owner.setPortalCooldown();
++                            }
+ 
+-                        // CraftBukkit start - moved up
+-                        // ServerPlayer newOwner = player.teleport(
+-                        //     new TeleportTransition(
+-                        //         level, teleportPos, Vec3.ZERO, 0.0F, 0.0F, Relative.union(Relative.ROTATION, Relative.DELTA), TeleportTransition.DO_NOTHING
+-                        //     )
+-                        // );
+-                        // CraftBukkit end - moved up
+-                        if (newOwner != null) {
++                            // CraftBukkit start - moved up
++                            // ServerPlayer newOwner = player.teleport(
++                            //     new TeleportTransition(
++                            //         level, teleportPos, Vec3.ZERO, 0.0F, 0.0F, Relative.union(Relative.ROTATION, Relative.DELTA), TeleportTransition.DO_NOTHING
++                            //     )
++                            // );
++                            // CraftBukkit end - moved up
+                             newOwner.resetFallDistance();
+                             newOwner.resetCurrentImpulseContext();
+                             newOwner.hurtServer(player.level(), this.damageSources().enderPearl().eventEntityDamager(this), 5.0F); // CraftBukkit // Paper - fix DamageSource API
+-                        }
+ 
+-                        this.playSound(level, teleportPos);
++                            this.playSound(level, teleportPos);
++                        };
++                        if (deferTeleport) {
++                            io.papermc.paper.pewpew.WorldTickCoordinator.get().enqueueGlobalCommit(teleportTask);
++                            this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT);
++                            return;
++                        }
++                        teleportTask.run();
+                     }
+                 } else {
+-                    Entity newOwner = owner.teleport(
+-                        new TeleportTransition(level, teleportPos, owner.getDeltaMovement(), owner.getYRot(), owner.getXRot(), TeleportTransition.DO_NOTHING)
+-                    );
+-                    if (newOwner != null) {
+-                        newOwner.resetFallDistance();
+-                    }
++                    final Runnable teleportTask = () -> {
++                        if (!isAllowedToTeleportOwner(owner, level)) {
++                            return;
++                        }
++                        Entity newOwner = owner.teleport(
++                            new TeleportTransition(level, teleportPos, owner.getDeltaMovement(), owner.getYRot(), owner.getXRot(), TeleportTransition.DO_NOTHING)
++                        );
++                        if (newOwner != null) {
++                            newOwner.resetFallDistance();
++                        }
+ 
+-                    if (newOwner instanceof LivingEntity livingEntity) {
+-                        livingEntity.resetCurrentImpulseContext();
+-                    }
++                        if (newOwner instanceof LivingEntity livingEntity) {
++                            livingEntity.resetCurrentImpulseContext();
++                        }
+ 
+-                    this.playSound(level, teleportPos);
++                        this.playSound(level, teleportPos);
++                    };
++                    if (deferTeleport) {
++                        io.papermc.paper.pewpew.WorldTickCoordinator.get().enqueueGlobalCommit(teleportTask);
++                        this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT);
++                        return;
++                    }
++                    teleportTask.run();
+                 }
+ 
+                 this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT); // CraftBukkit - add Bukkit remove cause

@@ -5,10 +5,10 @@ Subject: [PATCH] Make sapling tree type thread local
 
 
 diff --git a/net/minecraft/core/dispenser/DispenseItemBehavior.java b/net/minecraft/core/dispenser/DispenseItemBehavior.java
-index bfefb5031544caa59230f0073e8880c2b39ebf4d..b74da5448ddf58ae9329a1d0784c8d42124cde11 100644
+index b851968a97a0f6df597a9f1fc91517b6835adf68..f2a4ac84bd35f104b3a277783f19a10fef618e45 100644
 --- a/net/minecraft/core/dispenser/DispenseItemBehavior.java
 +++ b/net/minecraft/core/dispenser/DispenseItemBehavior.java
-@@ -416,8 +416,8 @@ public interface DispenseItemBehavior {
+@@ -346,8 +346,8 @@ public interface DispenseItemBehavior {
                  // CraftBukkit start
                  level.captureTreeGeneration = false;
                  if (!level.capturedBlockStates.isEmpty()) {
@@ -16,29 +16,42 @@ index bfefb5031544caa59230f0073e8880c2b39ebf4d..b74da5448ddf58ae9329a1d0784c8d42
 -                    net.minecraft.world.level.block.SaplingBlock.treeType = null;
 +                    org.bukkit.TreeType treeType = net.minecraft.world.level.block.SaplingBlock.treeTypeRT.get();
 +                    net.minecraft.world.level.block.SaplingBlock.treeTypeRT.remove();
-                     org.bukkit.Location location = org.bukkit.craftbukkit.util.CraftLocation.toBukkit(blockPos, level);
+                     org.bukkit.Location location = org.bukkit.craftbukkit.util.CraftLocation.toBukkit(target, level);
                      List<org.bukkit.block.BlockState> states = new java.util.ArrayList<>(level.capturedBlockStates.values());
                      level.capturedBlockStates.clear();
 diff --git a/net/minecraft/world/item/ItemStack.java b/net/minecraft/world/item/ItemStack.java
-index ed06cffe8a5eba2ca4a34ade81f8185e21d7b651..565f8d28df313c27266831eff633e1f693b1340b 100644
+index 1d08ac66271a441811a157ed6619b14bf58c403f..a082bf4f56cb362db26735446fe8888e7911f2b7 100644
 --- a/net/minecraft/world/item/ItemStack.java
 +++ b/net/minecraft/world/item/ItemStack.java
-@@ -404,8 +404,8 @@ public final class ItemStack implements DataComponentHolder {
-             if (interactionResult.consumesAction() && serverLevel.captureTreeGeneration && !serverLevel.capturedBlockStates.isEmpty()) {
-                 serverLevel.captureTreeGeneration = false;
-                 org.bukkit.Location location = org.bukkit.craftbukkit.util.CraftLocation.toBukkit(clickedPos, serverLevel);
--                org.bukkit.TreeType treeType = net.minecraft.world.level.block.SaplingBlock.treeType;
--                net.minecraft.world.level.block.SaplingBlock.treeType = null;
-+                org.bukkit.TreeType treeType = net.minecraft.world.level.block.SaplingBlock.treeTypeRT.get();
-+                net.minecraft.world.level.block.SaplingBlock.treeTypeRT.remove();
-                 List<org.bukkit.craftbukkit.block.CraftBlockState> blocks = new java.util.ArrayList<>(serverLevel.capturedBlockStates.values());
-                 serverLevel.capturedBlockStates.clear();
-                 org.bukkit.event.world.StructureGrowEvent structureEvent = null;
-diff --git a/net/minecraft/world/level/block/FungusBlock.java b/net/minecraft/world/level/block/FungusBlock.java
-index 9711efb088bd0da9168e9bcd0496bd7caddd2974..73eb20e49386376bd73615410cc679968dd23e47 100644
---- a/net/minecraft/world/level/block/FungusBlock.java
-+++ b/net/minecraft/world/level/block/FungusBlock.java
-@@ -76,9 +76,9 @@ public class FungusBlock extends VegetationBlock implements BonemealableBlock {
+@@ -402,8 +402,8 @@ public final class ItemStack implements DataComponentHolder, ItemInstance {
+         if (result.consumesAction() && level.captureTreeGeneration && !level.capturedBlockStates.isEmpty()) {
+             level.captureTreeGeneration = false;
+             org.bukkit.Location location = org.bukkit.craftbukkit.util.CraftLocation.toBukkit(pos, level);
+-            org.bukkit.TreeType treeType = net.minecraft.world.level.block.SaplingBlock.treeType;
+-            net.minecraft.world.level.block.SaplingBlock.treeType = null;
++            org.bukkit.TreeType treeType = net.minecraft.world.level.block.SaplingBlock.treeTypeRT.get();
++            net.minecraft.world.level.block.SaplingBlock.treeTypeRT.remove();
+             List<org.bukkit.craftbukkit.block.CraftBlockState> blocks = new java.util.ArrayList<>(level.capturedBlockStates.values());
+             level.capturedBlockStates.clear();
+             org.bukkit.event.world.StructureGrowEvent structureEvent = null;
+diff --git a/net/minecraft/world/level/block/MushroomBlock.java b/net/minecraft/world/level/block/MushroomBlock.java
+index 8d466e5a3e187cb151a7513de3e78d3350b32277..7de1384cea947c9ed92d7125a6bcd58fdff73178 100644
+--- a/net/minecraft/world/level/block/MushroomBlock.java
++++ b/net/minecraft/world/level/block/MushroomBlock.java
+@@ -94,7 +94,7 @@ public class MushroomBlock extends VegetationBlock implements BonemealableBlock
+         }
+ 
+         level.removeBlock(pos, false);
+-        SaplingBlock.treeType = (this == Blocks.BROWN_MUSHROOM) ? org.bukkit.TreeType.BROWN_MUSHROOM : org.bukkit.TreeType.RED_MUSHROOM; // CraftBukkit
++        SaplingBlock.treeTypeRT.set((this == Blocks.BROWN_MUSHROOM) ? org.bukkit.TreeType.BROWN_MUSHROOM : org.bukkit.TreeType.RED_MUSHROOM); // CraftBukkit
+         if (feature.get().value().place(level, level.getChunkSource().getGenerator(), random, pos)) {
+             return true;
+         }
+diff --git a/net/minecraft/world/level/block/NetherFungusBlock.java b/net/minecraft/world/level/block/NetherFungusBlock.java
+index 82ab930bf438e988d637786bdde88e34ea073a2f..030cebb0b4c4a3a262ae98331b73ada68a199787 100644
+--- a/net/minecraft/world/level/block/NetherFungusBlock.java
++++ b/net/minecraft/world/level/block/NetherFungusBlock.java
+@@ -84,9 +84,9 @@ public class NetherFungusBlock extends VegetationBlock implements BonemealableBl
              // CraftBukkit start
              .map((value) -> {
                  if (this == Blocks.WARPED_FUNGUS) {
@@ -50,33 +63,20 @@ index 9711efb088bd0da9168e9bcd0496bd7caddd2974..73eb20e49386376bd73615410cc67996
                  }
                  return value;
              })
-diff --git a/net/minecraft/world/level/block/MushroomBlock.java b/net/minecraft/world/level/block/MushroomBlock.java
-index b11ff87df7b75f2a3065bbed7b13cc52f7df83fc..c324e2b32731ff475638b882b6cbeb3c7e331878 100644
---- a/net/minecraft/world/level/block/MushroomBlock.java
-+++ b/net/minecraft/world/level/block/MushroomBlock.java
-@@ -93,7 +93,7 @@ public class MushroomBlock extends VegetationBlock implements BonemealableBlock
-             return false;
-         } else {
-             level.removeBlock(pos, false);
--            SaplingBlock.treeType = (this == Blocks.BROWN_MUSHROOM) ? org.bukkit.TreeType.BROWN_MUSHROOM : org.bukkit.TreeType.RED_MUSHROOM; // CraftBukkit
-+            SaplingBlock.treeTypeRT.set((this == Blocks.BROWN_MUSHROOM) ? org.bukkit.TreeType.BROWN_MUSHROOM : org.bukkit.TreeType.RED_MUSHROOM); // CraftBukkit
-             if (optional.get().value().place(level, level.getChunkSource().getGenerator(), random, pos)) {
-                 return true;
-             } else {
 diff --git a/net/minecraft/world/level/block/SaplingBlock.java b/net/minecraft/world/level/block/SaplingBlock.java
-index 23e9e5e7ef76fe3d6e1bbc41faf69ee65ca77d80..05eb41bb4b3a35539fe64c31aa1ba21b0ccd1255 100644
+index 61f0c8a9bb5bf9094fbd96d30fc36ed936ab9a2c..85fb65ea49f48bf3e7b70c39720f2e2dc7223996 100644
 --- a/net/minecraft/world/level/block/SaplingBlock.java
 +++ b/net/minecraft/world/level/block/SaplingBlock.java
-@@ -25,7 +25,7 @@ public class SaplingBlock extends VegetationBlock implements BonemealableBlock {
+@@ -24,7 +24,7 @@ public class SaplingBlock extends VegetationBlock implements BonemealableBlock {
      public static final IntegerProperty STAGE = BlockStateProperties.STAGE;
      private static final VoxelShape SHAPE = Block.column(12.0, 0.0, 12.0);
      protected final TreeGrower treeGrower;
--    public static @javax.annotation.Nullable org.bukkit.TreeType treeType; // CraftBukkit
+-    public static org.bukkit.@org.jspecify.annotations.Nullable TreeType treeType; // CraftBukkit
 +    public static final ThreadLocal<org.bukkit.TreeType> treeTypeRT = new ThreadLocal<>(); // CraftBukkit
  
      @Override
      public MapCodec<? extends SaplingBlock> codec() {
-@@ -62,8 +62,8 @@ public class SaplingBlock extends VegetationBlock implements BonemealableBlock {
+@@ -61,8 +61,8 @@ public class SaplingBlock extends VegetationBlock implements BonemealableBlock {
                  this.treeGrower.growTree(level, level.getChunkSource().getGenerator(), pos, state, random);
                  level.captureTreeGeneration = false;
                  if (!level.capturedBlockStates.isEmpty()) {
@@ -88,10 +88,10 @@ index 23e9e5e7ef76fe3d6e1bbc41faf69ee65ca77d80..05eb41bb4b3a35539fe64c31aa1ba21b
                      java.util.List<org.bukkit.block.BlockState> blocks = new java.util.ArrayList<>(level.capturedBlockStates.values());
                      level.capturedBlockStates.clear();
 diff --git a/net/minecraft/world/level/block/grower/TreeGrower.java b/net/minecraft/world/level/block/grower/TreeGrower.java
-index 5471619a0484ece08640e2b3fd26746c351dc3e0..cf429ea5470adc5521ab4ea425187a689407f8ae 100644
+index 2a537a329b635d48865e59c03589b89594ef012e..29e985c2c242e5e6a1c36abe2d29551b43d5f2c6 100644
 --- a/net/minecraft/world/level/block/grower/TreeGrower.java
 +++ b/net/minecraft/world/level/block/grower/TreeGrower.java
-@@ -202,51 +202,51 @@ public final class TreeGrower {
+@@ -216,51 +216,51 @@ public final class TreeGrower {
      // CraftBukkit start
      private void setTreeType(Holder<ConfiguredFeature<?, ?>> feature) {
          if (feature.is(TreeFeatures.OAK) || feature.is(TreeFeatures.OAK_BEES_005)) {

@@ -5,10 +5,10 @@ Subject: [PATCH] Fix quart biome cache key packing
 
 
 diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
-index aefd696667351fe9d09857e742120193e302b048..5cc98ccdbd409e7c016794e3996c9fc3309bc8c4 100644
+index 011e53a4512d709350e1fe77c92ba24eca6cde8d..316818a80a45fd19eac3996c1ddec621af11b06e 100644
 --- a/net/minecraft/world/level/NaturalSpawner.java
 +++ b/net/minecraft/world/level/NaturalSpawner.java
-@@ -729,7 +729,7 @@ public final class NaturalSpawner {
+@@ -760,7 +760,7 @@ public final class NaturalSpawner {
              int quartX = QuartPos.fromBlock(pos.getX());
              int quartY = QuartPos.fromBlock(pos.getY());
              int quartZ = QuartPos.fromBlock(pos.getZ());

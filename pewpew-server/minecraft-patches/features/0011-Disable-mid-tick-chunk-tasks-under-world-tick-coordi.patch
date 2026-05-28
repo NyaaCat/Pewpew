@@ -5,10 +5,10 @@ Subject: [PATCH] Disable mid-tick chunk tasks under world tick coordinator
 
 
 diff --git a/net/minecraft/server/level/ServerChunkCache.java b/net/minecraft/server/level/ServerChunkCache.java
-index af67b07722bb0125acd081dab767d7e7b360623b..f7122f640a7c68aecc3c105b29dc01372d972c2a 100644
+index 396ab3cdcf6f726ce7133395bb39594ef4b1c011..c80ce48d91f6f01d4f96fca807a79f3478eb7ef3 100644
 --- a/net/minecraft/server/level/ServerChunkCache.java
 +++ b/net/minecraft/server/level/ServerChunkCache.java
-@@ -176,7 +176,9 @@ public class ServerChunkCache extends ChunkSource implements ca.spottedleaf.moon
+@@ -175,7 +175,9 @@ public class ServerChunkCache extends ChunkSource implements ca.spottedleaf.moon
  
              // call mid-tick tasks for chunk system
              if ((i & 7) == 0) {
@@ -20,10 +20,10 @@ index af67b07722bb0125acd081dab767d7e7b360623b..f7122f640a7c68aecc3c105b29dc0137
              }
          }
 diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
-index cf574b16cca17f7ff24583acc88d5666aecf7697..29b229835897f68ad922b59017923e9915073a65 100644
+index 88f4ea38db72289158518978ae17d9ddfc071d25..fabf88b278e61f297c39f8aac68b69289b7b1811 100644
 --- a/net/minecraft/server/level/ServerLevel.java
 +++ b/net/minecraft/server/level/ServerLevel.java
-@@ -343,6 +343,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+@@ -349,6 +349,9 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
  
      @Override
      public final void moonrise$midTickTasks() {
@@ -33,7 +33,7 @@ index cf574b16cca17f7ff24583acc88d5666aecf7697..29b229835897f68ad922b59017923e99
          ((ca.spottedleaf.moonrise.patches.chunk_system.server.ChunkSystemMinecraftServer)this.server).moonrise$executeMidTickTasks();
      }
  
-@@ -1310,7 +1313,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+@@ -1346,7 +1349,9 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
          }
          // Paper start - rewrite chunk system
          if ((++this.tickedBlocksOrFluids & 7L) != 0L) {
@@ -44,7 +44,7 @@ index cf574b16cca17f7ff24583acc88d5666aecf7697..29b229835897f68ad922b59017923e99
          }
          // Paper end - rewrite chunk system
  
-@@ -1323,7 +1328,9 @@ public class ServerLevel extends Level implements ServerEntityGetter, WorldGenLe
+@@ -1359,7 +1364,9 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
          }
          // Paper start - rewrite chunk system
          if ((++this.tickedBlocksOrFluids & 7L) != 0L) {
@@ -56,11 +56,11 @@ index cf574b16cca17f7ff24583acc88d5666aecf7697..29b229835897f68ad922b59017923e99
          // Paper end - rewrite chunk system
  
 diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
-index b382133d5602cfa6192e43993447af09f6c7aed9..cba57a804cb7b2ce62748c28bf92b44da8610098 100644
+index fe783f0a53f7287b3629dcf2c97baad7b9a2e886..f0efdbf26b9d84a5ee01cce54dd0727ea56437a9 100644
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
-@@ -1410,7 +1410,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
-                 tickingBlockEntity.tick();
+@@ -1498,7 +1498,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+                 ticker.tick();
                  // Paper start - rewrite chunk system
                  if ((++tickedEntities & 7) == 0) {
 -                    ((ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel)(Level)(Object)this).moonrise$midTickTasks();
@@ -70,7 +70,7 @@ index b382133d5602cfa6192e43993447af09f6c7aed9..cba57a804cb7b2ce62748c28bf92b44d
                  }
                  // Paper end - rewrite chunk system
              }
-@@ -1432,7 +1434,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+@@ -1519,7 +1521,9 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
              entity.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.DISCARD);
              // Paper end - Prevent block entity and entity crashes
          }

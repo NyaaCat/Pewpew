@@ -5,10 +5,10 @@ Subject: [PATCH] Optimize block entity ticker removals
 
 
 diff --git a/net/minecraft/world/level/Level.java b/net/minecraft/world/level/Level.java
-index 579bbba4e823d4d0318e58759ca732b7c8e4d865..b382133d5602cfa6192e43993447af09f6c7aed9 100644
+index 56659181dc817ea028428eabf5937308c04b8cc5..fe783f0a53f7287b3629dcf2c97baad7b9a2e886 100644
 --- a/net/minecraft/world/level/Level.java
 +++ b/net/minecraft/world/level/Level.java
-@@ -112,7 +112,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+@@ -118,7 +118,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
          .add(new ExplosionParticleInfo(ParticleTypes.POOF, 0.5F, 1.0F))
          .add(new ExplosionParticleInfo(ParticleTypes.SMOKE, 1.0F, 1.0F))
          .build();
@@ -17,27 +17,28 @@ index 579bbba4e823d4d0318e58759ca732b7c8e4d865..b382133d5602cfa6192e43993447af09
      protected final CollectingNeighborUpdater neighborUpdater;
      private final List<TickingBlockEntity> pendingBlockEntityTickers = Lists.newArrayList();
      private boolean tickingBlockEntities;
-@@ -1401,13 +1401,11 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
-         boolean runsNormally = this.tickRateManager().runsNormally();
+@@ -1490,14 +1490,10 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
+         boolean tickBlockEntities = this.tickRateManager().runsNormally();
  
          int tickedEntities = 0; // Paper - rewrite chunk system
--        var toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<TickingBlockEntity>(); // Paper - Fix MC-117075; use removeAll
--        toRemove.add(null); // Paper - Fix MC-117075
-         for (this.tileTickPosition = 0; this.tileTickPosition < this.blockEntityTickers.size(); this.tileTickPosition++) { // Paper - Disable tick limiters
-             TickingBlockEntity tickingBlockEntity = this.blockEntityTickers.get(this.tileTickPosition);
-             // Spigot end
-             if (tickingBlockEntity.isRemoved()) {
--                toRemove.add(tickingBlockEntity); // Paper - Fix MC-117075; use removeAll
-+                this.blockEntityTickers.markAsRemoved(this.tileTickPosition); // Pewpew - optimize block entity removals
-             } else if (runsNormally && this.shouldTickBlocksAt(tickingBlockEntity.getPos())) {
-                 tickingBlockEntity.tick();
+-        // Paper start - Fix MC-117075 use removeAll
+-        final it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<@Nullable TickingBlockEntity> toRemove = new it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet<>();
+-        toRemove.add(null);
+         for (int tickerIndex = 0; tickerIndex < this.blockEntityTickers.size(); tickerIndex++) {
+             final TickingBlockEntity ticker = this.blockEntityTickers.get(tickerIndex);
+-        // Paper end - Fix MC-117075 use removeAll
+             if (ticker.isRemoved()) {
+-                toRemove.add(ticker); // Paper - Fix MC-117075 use removeAll
++                this.blockEntityTickers.markAsRemoved(tickerIndex); // Pewpew - optimize block entity removals
+             } else if (tickBlockEntities && this.shouldTickBlocksAt(ticker.getPos())) {
+                 ticker.tick();
                  // Paper start - rewrite chunk system
-@@ -1417,7 +1415,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
-                 // Paper end - rewrite chunk system
+@@ -1508,7 +1504,7 @@ public abstract class Level implements LevelAccessor, AutoCloseable, ca.spottedl
              }
          }
--        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075
-+        this.blockEntityTickers.removeMarkedEntries(); // Pewpew - optimize block entity removals
  
+-        this.blockEntityTickers.removeAll(toRemove); // Paper - Fix MC-117075 use removeAll
++        this.blockEntityTickers.removeMarkedEntries(); // Pewpew - optimize block entity removals
          this.tickingBlockEntities = false;
-         this.spigotConfig.currentPrimedTnt = 0; // Spigot
+     }
+ 

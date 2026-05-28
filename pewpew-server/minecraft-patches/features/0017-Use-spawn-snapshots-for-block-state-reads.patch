@@ -1,0 +1,56 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Mon, 19 Jan 2026 18:32:30 +0000
+Subject: [PATCH] Use spawn snapshots for block-state reads
+
+
+diff --git a/net/minecraft/world/level/NaturalSpawner.java b/net/minecraft/world/level/NaturalSpawner.java
+index 86c021e863c6165eb23885f4260d0e5c66952073..c322ce879795a6d530680568c7dcf499b21a38a4 100644
+--- a/net/minecraft/world/level/NaturalSpawner.java
++++ b/net/minecraft/world/level/NaturalSpawner.java
+@@ -314,7 +314,7 @@ public final class NaturalSpawner {
+         ChunkGenerator generator = level.getChunkSource().getGenerator();
+         LevelReader spawnLevel = snapshot != null ? snapshot.levelReader : level;
+         int yStart = start.getY();
+-        BlockState state = level.getBlockStateIfLoadedAndInBounds(start); // Paper - don't load chunks for mob spawn
++        BlockState state = getBlockStateIfLoadedAndInBounds(level, start, snapshot); // Paper - don't load chunks for mob spawn
+         if (state != null && !state.isRedstoneConductor(chunk, start)) { // Paper - don't load chunks for mob spawn
+             BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+             int clusterSize = 0;
+@@ -337,7 +337,7 @@ public final class NaturalSpawner {
+                     Player nearestPlayer = level.getNearestPlayer(xx, yStart, zz, -1.0, false);
+                     if (nearestPlayer != null) {
+                         double nearestPlayerDistanceSqr = nearestPlayer.distanceToSqr(xx, yStart, zz);
+-                        if (level.isLoadedAndInBounds(pos) && isRightDistanceToPlayerAndSpawnPoint(level, chunk, pos, nearestPlayerDistanceSqr)) { // Paper - don't load chunks for mob spawn
++                        if (isLoadedAndInBounds(level, pos, snapshot) && isRightDistanceToPlayerAndSpawnPoint(level, chunk, pos, nearestPlayerDistanceSqr)) { // Paper - don't load chunks for mob spawn
+                             if (currentSpawnData == null) {
+                                 Optional<MobSpawnSettings.SpawnerData> nextSpawnData = getRandomSpawnMobAt(
+                                     level, structureManager, generator, mobCategory, level.random, pos, spawnLevel
+@@ -403,6 +403,27 @@ public final class NaturalSpawner {
+         }
+     }
+ 
++    @Nullable
++    private static BlockState getBlockStateIfLoadedAndInBounds(ServerLevel level, BlockPos pos, @Nullable SpawnChunkSnapshot snapshot) {
++        if (!level.getWorldBorder().isWithinBounds(pos)) {
++            return null;
++        }
++        if (snapshot != null && snapshot.contains(pos)) {
++            return snapshot.getBlockState(pos);
++        }
++        return level.getBlockStateIfLoaded(pos);
++    }
++
++    private static boolean isLoadedAndInBounds(ServerLevel level, BlockPos pos, @Nullable SpawnChunkSnapshot snapshot) {
++        if (!level.getWorldBorder().isWithinBounds(pos)) {
++            return false;
++        }
++        if (snapshot != null && snapshot.contains(pos)) {
++            return true;
++        }
++        return level.getChunkIfLoaded(pos) != null;
++    }
++
+     private static boolean isRightDistanceToPlayerAndSpawnPoint(
+         final ServerLevel level, final ChunkAccess chunk, final BlockPos.MutableBlockPos pos, final double nearestPlayerDistanceSqr
+     ) {

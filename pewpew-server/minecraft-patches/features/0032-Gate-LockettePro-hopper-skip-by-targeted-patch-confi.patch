@@ -5,10 +5,10 @@ Subject: [PATCH] Gate LockettePro hopper skip by targeted patch config
 
 
 diff --git a/net/minecraft/world/level/block/entity/HopperBlockEntity.java b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-index 2acbc929fbf619ff93bbea266cc28cc6102dfd4c..55ee243d5b479acd0725bb509bad7580f674cf80 100644
+index 6c1b1c29c5d80523393a9c593a78593bf03a4549..ca3f7af82652aa72174de0bb75b3de9031aea37d 100644
 --- a/net/minecraft/world/level/block/entity/HopperBlockEntity.java
 +++ b/net/minecraft/world/level/block/entity/HopperBlockEntity.java
-@@ -149,7 +149,16 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
+@@ -147,7 +147,16 @@ public class HopperBlockEntity extends RandomizableContainerBlockEntity implemen
      private static final int HOPPER_EMPTY = 0;
      private static final int HOPPER_HAS_ITEMS = 1;
      private static final int HOPPER_IS_FULL = 2;

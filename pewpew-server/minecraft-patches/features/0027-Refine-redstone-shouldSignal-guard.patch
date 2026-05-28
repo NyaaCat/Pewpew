@@ -5,10 +5,10 @@ Subject: [PATCH] Refine redstone shouldSignal guard
 
 
 diff --git a/net/minecraft/world/level/block/RedStoneWireBlock.java b/net/minecraft/world/level/block/RedStoneWireBlock.java
-index f54579b6b6c24f2d0473b2c2372140a62196e280..a6e3056c67e0fba2fe27077c7420fb3e9bd6d317 100644
+index eb91e91d3130f36c889e5aedc9a102554854e315..018724262eaf9151e9f4caaf6006a6f733dbd398 100644
 --- a/net/minecraft/world/level/block/RedStoneWireBlock.java
 +++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
-@@ -64,17 +64,28 @@ public class RedStoneWireBlock extends Block {
+@@ -65,17 +65,28 @@ public class RedStoneWireBlock extends Block {
      private final Function<BlockState, VoxelShape> shapes;
      private final BlockState crossState;
      private final RedstoneWireEvaluator evaluator = new DefaultRedstoneWireEvaluator(this);

@@ -5,110 +5,89 @@ Subject: [PATCH] Parallelize world tick dispatch via coordinator
 
 
 diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
-index ca2caace6aab0dfcb0ab7a0fd28e66555c62fdc5..6ad52a430fe3a27844e8ff5e1293380c11bd147d 100644
+index cc35c6271c98615a486422d0490145227626bd85..f142cf80d2458c36e492143db4cb551955ed767b 100644
 --- a/net/minecraft/server/MinecraftServer.java
 +++ b/net/minecraft/server/MinecraftServer.java
-@@ -1799,34 +1799,81 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
-         }
+@@ -1836,26 +1836,67 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+         this.updateEffectiveRespawnData();
  
          this.isIteratingOverLevels = true; // Paper - Throw exception on world create while being ticked
--        for (ServerLevel serverLevel : this.getAllLevels()) {
--            serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
--            serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
--            serverLevel.updateLagCompensationTick(); // Paper - lag compensation
--            net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
--            profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
--            /* Drop global time updates
--            if (this.tickCount % 20 == 0) {
--                profilerFiller.push("timeSync");
--                this.synchronizeTime(serverLevel);
--                profilerFiller.pop();
--            }
--            // CraftBukkit end */
+-        for (ServerLevel level : this.getAllLevels()) {
+-            level.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
+-            level.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
+-            level.updateLagCompensationTick(); // Paper - lag compensation
+-            net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = level.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
+-            profiler.push(() -> level + " " + level.dimension().identifier());
+-            profiler.push("tick");
 +        if (io.papermc.paper.pewpew.WorldTickCoordinator.isEnabled()) {
 +            Map<String, Runnable> worldTasks = Maps.newLinkedHashMap();
-+            for (ServerLevel serverLevel : this.getAllLevels()) {
-+                final String worldKey = serverLevel.dimension().identifier().toString();
++            for (ServerLevel level : this.getAllLevels()) {
++                final String worldKey = level.dimension().identifier().toString();
 +                worldTasks.put(worldKey, () -> {
 +                    ProfilerFiller worldProfiler = Profiler.get();
-+                    serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
-+                    serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
-+                    serverLevel.updateLagCompensationTick(); // Paper - lag compensation
-+                    net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
-+                    worldProfiler.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
-+                    /* Drop global time updates
-+                    if (this.tickCount % 20 == 0) {
-+                        worldProfiler.push("timeSync");
-+                        this.synchronizeTime(serverLevel);
-+                        worldProfiler.pop();
-+                    }
-+                    // CraftBukkit end */
- 
--            profilerFiller.push("tick");
-+                    io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(serverLevel.getWorld().getName()));
-+                    worldProfiler.push("tick");
- 
-+                    try {
-+                        serverLevel.tick(hasTimeLeft);
-+                    } catch (Throwable var7) {
-+                        CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
-+                        serverLevel.fillReportDetails(crashReport);
-+                        throw new ReportedException(crashReport);
-+                    }
++                    level.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
++                    level.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
++                    level.updateLagCompensationTick(); // Paper - lag compensation
++                    net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = level.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
++                    worldProfiler.push(() -> level + " " + level.dimension().identifier());
 +
++                    io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(level.getWorld().getName()));
++                    worldProfiler.push("tick");
++
++                    try {
++                        level.tick(haveTime);
++                    } catch (Throwable t) {
++                        CrashReport report = CrashReport.forThrowable(t, "Exception ticking world");
++                        level.fillReportDetails(report);
++                        throw new ReportedException(report);
++                    }
+ 
 +                    worldProfiler.pop();
 +                    worldProfiler.pop();
-+                    serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
++                    level.explosionDensityCache.clear(); // Paper - Optimize explosions
 +                });
 +            }
 +            io.papermc.paper.pewpew.WorldTickCoordinator.TickBarrier barrier =
 +                io.papermc.paper.pewpew.WorldTickCoordinator.get().dispatchWorldTicks(worldTasks);
              try {
--                serverLevel.tick(hasTimeLeft);
--            } catch (Throwable var7) {
--                CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
--                serverLevel.fillReportDetails(crashReport);
--                throw new ReportedException(crashReport);
+-                level.tick(haveTime);
+-            } catch (Throwable t) {
+-                CrashReport report = CrashReport.forThrowable(t, "Exception ticking world");
+-                level.fillReportDetails(report);
+-                throw new ReportedException(report);
 +                barrier.await();
 +            } catch (InterruptedException interrupted) {
 +                Thread.currentThread().interrupt();
 +                throw new RuntimeException("Interrupted while waiting for world ticks", interrupted);
              }
 +        } else {
-+            for (ServerLevel serverLevel : this.getAllLevels()) {
-+                serverLevel.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
-+                serverLevel.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
-+                serverLevel.updateLagCompensationTick(); // Paper - lag compensation
-+                net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = serverLevel.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
-+                profilerFiller.push(() -> serverLevel + " " + serverLevel.dimension().identifier());
-+                /* Drop global time updates
-+                if (this.tickCount % 20 == 0) {
-+                    profilerFiller.push("timeSync");
-+                    this.synchronizeTime(serverLevel);
-+                    profilerFiller.pop();
-+                }
-+                // CraftBukkit end */
++            for (ServerLevel level : this.getAllLevels()) {
++                level.hasPhysicsEvent = org.bukkit.event.block.BlockPhysicsEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - BlockPhysicsEvent
++                level.hasEntityMoveEvent = io.papermc.paper.event.entity.EntityMoveEvent.getHandlerList().getRegisteredListeners().length > 0; // Paper - Add EntityMoveEvent
++                level.updateLagCompensationTick(); // Paper - lag compensation
++                net.minecraft.world.level.block.entity.HopperBlockEntity.skipHopperEvents = level.paperConfig().hopper.disableMoveEvent || org.bukkit.event.inventory.InventoryMoveItemEvent.getHandlerList().getRegisteredListeners().length == 0; // Paper - Perf: Optimize Hoppers
++                profiler.push(() -> level + " " + level.dimension().identifier());
  
--            profilerFiller.pop();
--            profilerFiller.pop();
--            serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
-+                io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(serverLevel.getWorld().getName()));
-+                profilerFiller.push("tick");
+-            profiler.pop();
+-            profiler.pop();
+-            level.explosionDensityCache.clear(); // Paper - Optimize explosions
++                io.papermc.paper.pewpew.WorldTickCoordinator.get().drainCommits(List.of(level.getWorld().getName()));
++                profiler.push("tick");
 +
 +                try {
-+                    serverLevel.tick(hasTimeLeft);
-+                } catch (Throwable var7) {
-+                    CrashReport crashReport = CrashReport.forThrowable(var7, "Exception ticking world");
-+                    serverLevel.fillReportDetails(crashReport);
-+                    throw new ReportedException(crashReport);
++                    level.tick(haveTime);
++                } catch (Throwable t) {
++                    CrashReport report = CrashReport.forThrowable(t, "Exception ticking world");
++                    level.fillReportDetails(report);
++                    throw new ReportedException(report);
 +                }
 +
-+                profilerFiller.pop();
-+                profilerFiller.pop();
-+                serverLevel.explosionDensityCache.clear(); // Paper - Optimize explosions
++                profiler.pop();
++                profiler.pop();
++                level.explosionDensityCache.clear(); // Paper - Optimize explosions
 +            }
          }
 +        io.papermc.paper.pewpew.WorldTickCoordinator.get().drainGlobalCommits();
          this.isIteratingOverLevels = false; // Paper - Throw exception on world create while being ticked
  
-         profilerFiller.popPush("connection");
+         profiler.popPush("connection");

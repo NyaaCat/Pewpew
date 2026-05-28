@@ -5,10 +5,10 @@ Subject: [PATCH] Use thread-local tree type in CraftBlock
 
 
 diff --git a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-index 6809f9dcf8510c714145d99d250eb69f98d9bf27..86b07fc1c075be8ff289566fbfb43d07ce12911a 100644
+index 5d6116c55072c028e1e9409628de47932d06a4cf..aea178ef29ab55f25b71b4c56dd8c1bcc63f602b 100644
 --- a/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
 +++ b/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java
-@@ -559,8 +559,8 @@ public class CraftBlock implements Block {
+@@ -531,8 +531,8 @@ public class CraftBlock implements Block {
          world.captureTreeGeneration = false;
  
          if (!world.capturedBlockStates.isEmpty()) {
@@ -16,6 +16,6 @@ index 6809f9dcf8510c714145d99d250eb69f98d9bf27..86b07fc1c075be8ff289566fbfb43d07
 -            SaplingBlock.treeType = null;
 +            TreeType treeType = SaplingBlock.treeTypeRT.get();
 +            SaplingBlock.treeTypeRT.remove();
-             List<BlockState> states = new ArrayList<>(world.capturedBlockStates.values());
+             List<org.bukkit.block.BlockState> states = new ArrayList<>(world.capturedBlockStates.values());
              world.capturedBlockStates.clear();
              StructureGrowEvent structureEvent = null;
