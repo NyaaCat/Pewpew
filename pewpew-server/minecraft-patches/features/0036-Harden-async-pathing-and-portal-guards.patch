@@ -1,0 +1,369 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 16 Jun 2026 03:30:25 +0000
+Subject: [PATCH] Harden async pathing and portal guards
+
+
+diff --git a/io/papermc/paper/redstone/RedstoneWireTurbo.java b/io/papermc/paper/redstone/RedstoneWireTurbo.java
+index 86a6d532a03070db0682d1749de1b3715e73e026..4b5ac9631d282a2d3b19a2f693947816061ad47d 100644
+--- a/io/papermc/paper/redstone/RedstoneWireTurbo.java
++++ b/io/papermc/paper/redstone/RedstoneWireTurbo.java
+@@ -829,14 +829,18 @@ public final class RedstoneWireTurbo {
+         j = getMaxCurrentStrength(upd, j);
+         int l = 0;
+ 
+-        wire.setShouldSignal(false); // Pewpew - thread-local guard for parallel ticking
+         // Unfortunately, World.isBlockIndirectlyGettingPowered is complicated,
+         // and I'm not ready to try to replicate even more functionality from
+         // elsewhere in Minecraft into this accelerator.  So sadly, we must
+         // suffer the performance hit of this very expensive call.  If there
+         // is consistency to what this call returns, we may be able to cache it.
+-        final int k = worldIn.getBestNeighborSignal(upd.self);
+-        wire.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
++        final int k;
++        wire.setShouldSignal(false); // Pewpew - thread-local guard for parallel ticking
++        try {
++            k = worldIn.getBestNeighborSignal(upd.self);
++        } finally {
++            wire.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
++        }
+ 
+         // The variable 'k' holds the maximum redstone power value of any adjacent blocks.
+         // If 'k' has the highest level of all neighbors, then the power level of this
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index 47d98de96d8ee7afa7ac1aab00e5226adf2a0fd3..e80fa7818cf3550ac5be4f6955de3ba6c815f679 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -848,8 +848,11 @@ public abstract class Entity implements SyncedDataHolder, DebugValueSource, Name
+             if (io.papermc.paper.pewpew.WorldTickCoordinator.isEnabled()
+                 && (this.portalCooldown > 0 || this.portalProcess != null)
+                 && this.level() instanceof ServerLevel serverLevel) {
++                if (this.isPassenger()) {
++                    return;
++                }
+                 io.papermc.paper.pewpew.WorldTickCoordinator.get().enqueueGlobalCommit(() -> {
+-                    if (!this.isRemoved() && this.level() == serverLevel) {
++                    if (!this.isRemoved() && !this.isPassenger() && this.level() == serverLevel) {
+                         this.handlePortal();
+                     }
+                 });
+diff --git a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
+index 1355a5b7fd70c5c0bb57d1459913a4b9a45665b3..02c0ab8f9859d817df7bbcd00b3394552df754ab 100644
+--- a/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
++++ b/net/minecraft/world/entity/ai/behavior/MoveToTargetSink.java
+@@ -124,7 +124,7 @@ public class MoveToTargetSink extends Behavior<Mob> {
+         if (this.reachedTarget(mob, target)) {
+             brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
+         } else {
+-            boolean flag = this.path != null && (AsyncPath.isPending(this.path) || this.path.canReach());
++            boolean flag = this.path != null && !AsyncPath.isPending(this.path) && this.path.canReach();
+             if (flag) {
+                 brain.eraseMemory(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE);
+             } else if (!brain.hasMemoryValue(MemoryModuleType.CANT_REACH_WALK_TARGET_SINCE)) {
+diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index 2470cc3f9d226933ad612eca16161c0b3e57126c..5f15ae65d460d1b43f27111d118a7e0b5fd89c19 100644
+--- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -307,6 +307,10 @@ public abstract class PathNavigation {
+ 
+         if (!this.isDone()) {
+             if (AsyncPath.isPending(this.path)) {
++                if (this.level instanceof ServerLevel serverLevel
++                    && AsyncPathService.expireNavigationPath(this.mob, this, this.path, serverLevel.getGameTime())) {
++                    this.stop();
++                }
+                 return;
+             }
+             if (this.canUpdatePath()) {
+@@ -424,7 +428,7 @@ public abstract class PathNavigation {
+     }
+ 
+     public boolean isDone() {
+-        return this.path == null || this.path.isDone();
++        return this.path == null || (!AsyncPath.isPending(this.path) && this.path.isDone());
+     }
+ 
+     public boolean isInProgress() {
+diff --git a/net/minecraft/world/level/block/RedStoneWireBlock.java b/net/minecraft/world/level/block/RedStoneWireBlock.java
+index a6e3056c67e0fba2fe27077c7420fb3e9bd6d317..219dc82e3a22fca67e9122ea3b5ec853205b377e 100644
+--- a/net/minecraft/world/level/block/RedStoneWireBlock.java
++++ b/net/minecraft/world/level/block/RedStoneWireBlock.java
+@@ -350,9 +350,11 @@ public class RedStoneWireBlock extends Block {
+ 
+     public int getBlockSignal(Level level, BlockPos pos) {
+         this.setShouldSignal(false); // Pewpew - thread-local guard for parallel ticking
+-        int bestNeighborSignal = level.getBestNeighborSignal(pos);
+-        this.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
+-        return bestNeighborSignal;
++        try {
++            return level.getBestNeighborSignal(pos);
++        } finally {
++            this.setShouldSignal(true); // Pewpew - thread-local guard for parallel ticking
++        }
+     }
+ 
+     private void checkCornerChangeAt(Level level, BlockPos pos) {
+diff --git a/net/minecraft/world/level/pathfinder/AsyncPath.java b/net/minecraft/world/level/pathfinder/AsyncPath.java
+index 76beb0c901a5947939e8f3887c9333a321c89434..9772cd3c119abaf2d9b37695c1757edb6c2c242e 100644
+--- a/net/minecraft/world/level/pathfinder/AsyncPath.java
++++ b/net/minecraft/world/level/pathfinder/AsyncPath.java
+@@ -8,12 +8,14 @@ import net.minecraft.core.BlockPos;
+ public final class AsyncPath {
+     private static final ConcurrentHashMap<Path, AsyncPath> PENDING = new ConcurrentHashMap<>();
+     private final long requestId;
++    private final long createdGameTime;
+     private final Path pendingPath;
+     @Nullable
+     private volatile Path resolved;
+ 
+-    public AsyncPath(final long requestId, final BlockPos target) {
++    public AsyncPath(final long requestId, final BlockPos target, final long createdGameTime) {
+         this.requestId = requestId;
++        this.createdGameTime = createdGameTime;
+         this.pendingPath = new Path(List.of(), target, false);
+         PENDING.put(this.pendingPath, this);
+     }
+@@ -22,6 +24,10 @@ public final class AsyncPath {
+         return this.requestId;
+     }
+ 
++    public long createdGameTime() {
++        return this.createdGameTime;
++    }
++
+     public Path pendingPath() {
+         return this.pendingPath;
+     }
+@@ -43,4 +49,9 @@ public final class AsyncPath {
+     public static boolean isPending(@Nullable final Path path) {
+         return path != null && PENDING.containsKey(path);
+     }
++
++    @Nullable
++    static AsyncPath pending(@Nullable final Path path) {
++        return path == null ? null : PENDING.get(path);
++    }
+ }
+diff --git a/net/minecraft/world/level/pathfinder/AsyncPathService.java b/net/minecraft/world/level/pathfinder/AsyncPathService.java
+index 549850e039ce0ab8b20006db58be58e1a038a58b..0386dfe50737be9bb4adf35f261e62c9b4f727a2 100644
+--- a/net/minecraft/world/level/pathfinder/AsyncPathService.java
++++ b/net/minecraft/world/level/pathfinder/AsyncPathService.java
+@@ -27,7 +27,10 @@ public final class AsyncPathService {
+     private static final Logger LOGGER = Logger.getLogger(AsyncPathService.class.getName());
+     private static final String ENABLE_PROPERTY = "pewpew.asyncPathfinding";
+     private static final String MAX_PENDING_PROPERTY = "pewpew.asyncPathfinding.maxPending";
++    private static final String PENDING_TIMEOUT_TICKS_PROPERTY = "pewpew.asyncPathfinding.pendingTimeoutTicks";
+     private static final String MONSTER_SYNC_FALLBACK_PROPERTY = "pewpew.asyncPathfinding.monsterSyncFallback";
++    private static final int DEFAULT_PENDING_TIMEOUT_TICKS = 60;
++    private static final int MIN_PENDING_TIMEOUT_TICKS = 20;
+     private static final AsyncPathService INSTANCE = new AsyncPathService();
+     private static final ThreadLocal<PathfindingContext> PATHFINDER_CONTEXT = ThreadLocal.withInitial(PathfindingContext::new);
+     private final ConcurrentHashMap<UUID, PendingRequest> pending = new ConcurrentHashMap<>();
+@@ -44,7 +47,13 @@ public final class AsyncPathService {
+     }
+ 
+     public static void invalidateWorld(final String worldName) {
+-        INSTANCE.pending.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
++        INSTANCE.pending.entrySet().removeIf(entry -> {
++            if (!entry.getValue().worldName.equals(worldName)) {
++                return false;
++            }
++            entry.getValue().asyncPath.complete(null);
++            return true;
++        });
+         INSTANCE.pendingPoi.entrySet().removeIf(entry -> entry.getValue().worldName.equals(worldName));
+         AsyncSnapshotCache.invalidateWorld(worldName);
+     }
+@@ -95,6 +104,14 @@ public final class AsyncPathService {
+         return INSTANCE.isQueueSaturated();
+     }
+ 
++    public static boolean expireNavigationPath(final Mob mob, final PathNavigation navigation, @Nullable final Path path, final long gameTime) {
++        final AsyncPath asyncPath = AsyncPath.pending(path);
++        if (asyncPath == null || !isExpired(asyncPath, gameTime)) {
++            return false;
++        }
++        return INSTANCE.expirePending(mob.getUUID(), navigation, asyncPath);
++    }
++
+     @Nullable
+     private Path scheduleInternal(
+         final ServerLevel level,
+@@ -118,6 +135,10 @@ public final class AsyncPathService {
+         final UUID mobId = mob.getUUID();
+         PendingRequest existing = this.pending.get(mobId);
+         if (existing != null) {
++            if (existing.isExpired(level.getGameTime())) {
++                this.expirePending(existing);
++                return null;
++            }
+             return existing.asyncPath.pendingPath();
+         }
+         init();
+@@ -127,7 +148,7 @@ public final class AsyncPathService {
+         }
+         final String worldName = level.getWorld().getName();
+         final BlockPos targetHint = targets.iterator().next();
+-        final AsyncPath asyncPath = new AsyncPath(this.requestIds.incrementAndGet(), targetHint);
++        final AsyncPath asyncPath = new AsyncPath(this.requestIds.incrementAndGet(), targetHint, level.getGameTime());
+         final PendingRequest request = new PendingRequest(
+             level,
+             mobId,
+@@ -153,6 +174,10 @@ public final class AsyncPathService {
+         );
+         if (this.pending.putIfAbsent(mobId, request) != null) {
+             PendingRequest current = this.pending.get(mobId);
++            if (current != null && current.isExpired(level.getGameTime())) {
++                this.expirePending(current);
++                return null;
++            }
+             return current == null ? null : current.asyncPath.pendingPath();
+         }
+         try {
+@@ -186,8 +211,12 @@ public final class AsyncPathService {
+         }
+         Objects.requireNonNull(callback, "callback");
+         final UUID mobId = mob.getUUID();
+-        if (this.pendingPoi.containsKey(mobId)) {
+-            return true;
++        PendingPoiRequest existing = this.pendingPoi.get(mobId);
++        if (existing != null) {
++            if (!existing.isExpired(level.getGameTime())) {
++                return true;
++            }
++            this.expirePendingPoi(existing);
+         }
+         init();
+         final ThreadPoolExecutor executor = this.executor;
+@@ -219,6 +248,11 @@ public final class AsyncPathService {
+             callback
+         );
+         if (this.pendingPoi.putIfAbsent(mobId, request) != null) {
++            PendingPoiRequest current = this.pendingPoi.get(mobId);
++            if (current != null && current.isExpired(level.getGameTime())) {
++                this.expirePendingPoi(current);
++                return false;
++            }
+             return true;
+         }
+         try {
+@@ -251,12 +285,49 @@ public final class AsyncPathService {
+             MAX_PENDING_PROPERTY,
+             Math.max(1, executor.getMaximumPoolSize()) * 32
+         ));
+-        if (this.pending.size() >= maxPending) {
++        if (this.pending.size() + this.pendingPoi.size() >= maxPending) {
+             return false;
+         }
+         return executor.getQueue().remainingCapacity() > 0;
+     }
+ 
++    private static int pendingTimeoutTicks() {
++        return Math.max(MIN_PENDING_TIMEOUT_TICKS, Integer.getInteger(PENDING_TIMEOUT_TICKS_PROPERTY, DEFAULT_PENDING_TIMEOUT_TICKS));
++    }
++
++    private static boolean isExpired(final AsyncPath asyncPath, final long gameTime) {
++        return gameTime - asyncPath.createdGameTime() >= pendingTimeoutTicks();
++    }
++
++    private static boolean isExpired(final long createdGameTime, final long gameTime) {
++        return gameTime - createdGameTime >= pendingTimeoutTicks();
++    }
++
++    private boolean expirePending(final UUID mobId, final PathNavigation navigation, final AsyncPath asyncPath) {
++        final PendingRequest request = this.pending.get(mobId);
++        if (request == null || request.navigation != navigation || request.asyncPath != asyncPath) {
++            asyncPath.complete(null);
++            return true;
++        }
++        return this.expirePending(request);
++    }
++
++    private boolean expirePending(final PendingRequest request) {
++        if (!this.pending.remove(request.mobId, request)) {
++            return false;
++        }
++        request.completeFailure();
++        return true;
++    }
++
++    private boolean expirePendingPoi(final PendingPoiRequest request) {
++        if (!this.pendingPoi.remove(request.mobId, request)) {
++            return false;
++        }
++        request.callback.accept(null);
++        return true;
++    }
++
+     private static final class PathfindingContext {
+         private final SnapshotWalkNodeEvaluator evaluator = new SnapshotWalkNodeEvaluator();
+         private final SnapshotPathFinder pathFinder = new SnapshotPathFinder(this.evaluator, 1);
+@@ -336,7 +407,9 @@ public final class AsyncPathService {
+             }
+             final Path finalPath = path;
+             final Throwable finalError = error;
+-            WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> applyResult(finalPath, finalError));
++            if (!WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> applyResult(finalPath, finalError))) {
++                this.discard();
++            }
+         }
+ 
+         private void applyResult(@Nullable Path path, @Nullable Throwable error) {
+@@ -383,6 +456,16 @@ public final class AsyncPathService {
+                 this.navigation.stop();
+             }
+         }
++
++        private boolean isExpired(final long gameTime) {
++            return AsyncPathService.isExpired(this.asyncPath, gameTime);
++        }
++
++        private void discard() {
++            if (AsyncPathService.this.pending.remove(this.mobId, this)) {
++                this.asyncPath.complete(null);
++            }
++        }
+     }
+ 
+     private final class PendingPoiRequest {
+@@ -402,6 +485,7 @@ public final class AsyncPathService {
+         private final boolean canFloat;
+         private final boolean canWalkOverFences;
+         private final long generationId;
++        private final long createdGameTime;
+         private final PoiPathCallback callback;
+ 
+         private PendingPoiRequest(
+@@ -438,6 +522,7 @@ public final class AsyncPathService {
+             this.canFloat = canFloat;
+             this.canWalkOverFences = canWalkOverFences;
+             this.generationId = generationId;
++            this.createdGameTime = level.getGameTime();
+             this.callback = callback;
+         }
+ 
+@@ -459,7 +544,9 @@ public final class AsyncPathService {
+             }
+             final Path finalPath = path;
+             final Throwable finalError = error;
+-            WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> applyResult(finalPath, finalError));
++            if (!WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> applyResult(finalPath, finalError))) {
++                this.discard();
++            }
+         }
+ 
+         private void applyResult(@Nullable Path path, @Nullable Throwable error) {
+@@ -487,5 +574,13 @@ public final class AsyncPathService {
+             }
+             this.callback.accept(path);
+         }
++
++        private boolean isExpired(final long gameTime) {
++            return AsyncPathService.isExpired(this.createdGameTime, gameTime);
++        }
++
++        private void discard() {
++            AsyncPathService.this.pendingPoi.remove(this.mobId, this);
++        }
+     }
+ }
