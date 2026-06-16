@@ -1,0 +1,95 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Tue, 16 Jun 2026 03:54:46 +0000
+Subject: [PATCH] Harden async commit cleanup
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/AsyncSensorService.java b/src/main/java/io/papermc/paper/pewpew/AsyncSensorService.java
+index 9ff5c0890fc2410fb55bbf03cdfefef0a3d09731..b22712acd8b7994042851608794cf1b89ce27086 100644
+--- a/src/main/java/io/papermc/paper/pewpew/AsyncSensorService.java
++++ b/src/main/java/io/papermc/paper/pewpew/AsyncSensorService.java
+@@ -219,7 +219,9 @@ public final class AsyncSensorService {
+                 AsyncSensorService.this.pendingLiving.remove(this.ownerId, this);
+                 return;
+             }
+-            WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> apply(sortedIds));
++            if (!WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> apply(sortedIds))) {
++                AsyncSensorService.this.pendingLiving.remove(this.ownerId, this);
++            }
+         }
+ 
+         private void apply(List<UUID> sortedIds) {
+@@ -268,7 +270,9 @@ public final class AsyncSensorService {
+                 AsyncSensorService.this.pendingPlayers.remove(this.ownerId, this);
+                 return;
+             }
+-            WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> apply(sortedIds));
++            if (!WorldTickCoordinator.get().enqueueCommit(this.worldName, this.generationId, () -> apply(sortedIds))) {
++                AsyncSensorService.this.pendingPlayers.remove(this.ownerId, this);
++            }
+         }
+ 
+         private void apply(List<UUID> sortedIds) {
+@@ -309,4 +313,4 @@ public final class AsyncSensorService {
+             brain.setMemory(MemoryModuleType.NEAREST_VISIBLE_ATTACKABLE_PLAYER, attackable.isEmpty() ? null : attackable.get(0));
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+index 7a265e733863a6adaede2c8cc129a0cefc295620..525b2f7e8158076d8fb001481a0f9fec72ef95b0 100644
+--- a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
++++ b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+@@ -36,6 +36,7 @@ public final class PewpewConfig {
+     public static int asyncPoolWorkers;
+     public static int asyncPoolQueueLimit;
+     public static int asyncPathfindingMaxPending;
++    public static int asyncPathfindingPendingTimeoutTicks;
+     public static boolean asyncPathfindingMonsterSyncFallback;
+     public static int worldTickCoordinatorWorkers;
+     public static long worldTickCoordinatorStallThresholdNanos;
+@@ -79,6 +80,7 @@ public final class PewpewConfig {
+         asyncPoolWorkers = getInt("settings.async-pool-workers", -1);
+         asyncPoolQueueLimit = getInt("settings.async-pool-queue-limit", -1);
+         asyncPathfindingMaxPending = getInt("settings.async-pathfinding-max-pending", -1);
++        asyncPathfindingPendingTimeoutTicks = getInt("settings.async-pathfinding-pending-timeout-ticks", 60);
+         asyncPathfindingMonsterSyncFallback = getBoolean("settings.async-pathfinding-monster-sync-fallback", true);
+         worldTickCoordinatorWorkers = getInt("settings.world-tick-coordinator-workers", -1);
+         worldTickCoordinatorStallThresholdNanos = getLong("settings.world-tick-coordinator-stall-threshold-nanos", 50_000_000L);
+@@ -115,6 +117,7 @@ public final class PewpewConfig {
+         setOptionalIntProperty("pewpew.async.workers", asyncPoolWorkers);
+         setOptionalIntProperty("pewpew.async.queueLimit", asyncPoolQueueLimit);
+         setOptionalIntProperty("pewpew.asyncPathfinding.maxPending", asyncPathfindingMaxPending);
++        setOptionalIntProperty("pewpew.asyncPathfinding.pendingTimeoutTicks", asyncPathfindingPendingTimeoutTicks);
+         setBooleanProperty("pewpew.asyncPathfinding.monsterSyncFallback", asyncPathfindingMonsterSyncFallback);
+         setOptionalIntProperty("pewpew.worldTickCoordinator.workers", worldTickCoordinatorWorkers);
+         setOptionalLongProperty("pewpew.worldTickCoordinator.stallThresholdNanos", worldTickCoordinatorStallThresholdNanos);
+@@ -138,6 +141,7 @@ public final class PewpewConfig {
+         LOGGER.info("Pewpew settings: async-pool-workers=" + formatOptional(asyncPoolWorkers)
+             + " async-pool-queue-limit=" + formatOptional(asyncPoolQueueLimit)
+             + " async-pathfinding-max-pending=" + formatOptional(asyncPathfindingMaxPending)
++            + " async-pathfinding-pending-timeout-ticks=" + formatOptional(asyncPathfindingPendingTimeoutTicks)
+             + " async-pathfinding-monster-sync-fallback=" + (asyncPathfindingMonsterSyncFallback ? "enabled" : "disabled"));
+         LOGGER.info("Pewpew settings: world-tick-max-workers=" + formatOptional(worldTickCoordinatorWorkers)
+             + " world-tick-stall-threshold-nanos=" + worldTickCoordinatorStallThresholdNanos
+diff --git a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+index e447c7d6a873229ca1b0dcc0e449a0e233a8fe27..9877a4b007086427ecdf71c7eba8065cc7d778b2 100644
+--- a/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
++++ b/src/main/java/io/papermc/paper/pewpew/WorldTickCoordinator.java
+@@ -216,12 +216,13 @@ public final class WorldTickCoordinator {
+         return this.globalCommitQueue.drain();
+     }
+ 
+-    public void enqueueCommit(final String worldName, final long generationId, final Runnable commit) {
++    public boolean enqueueCommit(final String worldName, final long generationId, final Runnable commit) {
+         Objects.requireNonNull(commit, "commit");
+         if (generationId != currentGeneration(worldName)) {
+-            return;
++            return false;
+         }
+         commitQueueFor(worldName).enqueue(commit);
++        return true;
+     }
+ 
+     public int drainCommits(final List<String> worldNames) {
