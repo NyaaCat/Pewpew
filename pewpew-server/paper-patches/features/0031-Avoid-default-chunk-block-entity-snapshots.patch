@@ -1,0 +1,103 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Phoenix Bot <w@c.at>
+Date: Sat, 1 Aug 2026 08:06:09 +0000
+Subject: [PATCH] Avoid default chunk block entity snapshots
+
+
+diff --git a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+index 525b2f7e8158076d8fb001481a0f9fec72ef95b0..339d720ba2a74dba1f8b3e5ccc6dad599f689848 100644
+--- a/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
++++ b/src/main/java/io/papermc/paper/pewpew/PewpewConfig.java
+@@ -44,6 +44,7 @@ public final class PewpewConfig {
+     public static boolean locketteproLockedContainersEnabled;
+     public static boolean locketteproLockedContainersSkipDestination;
+     public static String locketteproLockedContainersPdcKey;
++    public static boolean defaultChunkTileEntitySnapshotsEnabled;
+ 
+     private PewpewConfig() {
+     }
+@@ -88,6 +89,7 @@ public final class PewpewConfig {
+         locketteproLockedContainersEnabled = getBoolean("targeted-patches.lockettepro-locked-containers.enabled", false);
+         locketteproLockedContainersSkipDestination = getBoolean("targeted-patches.lockettepro-locked-containers.skip-destination", true);
+         locketteproLockedContainersPdcKey = getString("targeted-patches.lockettepro-locked-containers.pdc-key", "lockettepro:locked_container");
++        defaultChunkTileEntitySnapshotsEnabled = getBoolean("targeted-patches.default-chunk-tile-entity-snapshots.enabled", false);
+ 
+         applySystemProperties();
+         logFeatureFlags();
+@@ -150,6 +152,8 @@ public final class PewpewConfig {
+             + (locketteproLockedContainersEnabled ? "enabled" : "disabled")
+             + " skip-destination=" + (locketteproLockedContainersSkipDestination ? "enabled" : "disabled")
+             + " pdc-key=" + locketteproLockedContainersPdcKey);
++        LOGGER.info("Pewpew targeted patches: default-chunk-tile-entity-snapshots="
++            + (defaultChunkTileEntitySnapshotsEnabled ? "enabled" : "disabled"));
+     }
+ 
+     private static void logFlag(final String name, final boolean enabled) {
+diff --git a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java b/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
+index 09baa8c13a56e0f503815a436042b7b79b1698e4..82b1db54280fe0c9c13fb7c985718f7da77081a2 100644
+--- a/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
++++ b/src/main/java/org/bukkit/craftbukkit/CraftChunk.java
+@@ -124,7 +124,10 @@ public class CraftChunk implements Chunk {
+ 
+     @Override
+     public BlockState[] getTileEntities() {
+-        return this.getTileEntities(true);
++        // Pewpew start - Avoid deep-copying every block entity for legacy callers. Plugins that need detached
++        // states can still request them explicitly through getTileEntities(true).
++        return this.getTileEntities(io.papermc.paper.pewpew.PewpewConfig.defaultChunkTileEntitySnapshotsEnabled);
++        // Pewpew end - Avoid deep-copying every block entity for legacy callers
+     }
+ 
+     @Override
+diff --git a/src/test/java/io/papermc/paper/pewpew/ThreadLocalIsolationTest.java b/src/test/java/io/papermc/paper/pewpew/ThreadLocalIsolationTest.java
+index 463fd6a7b8fdd73f1cbb36361181ba7ad8da2318..f7da55747d121ddecc7757c7b4dbf894ba2f2a85 100644
+--- a/src/test/java/io/papermc/paper/pewpew/ThreadLocalIsolationTest.java
++++ b/src/test/java/io/papermc/paper/pewpew/ThreadLocalIsolationTest.java
+@@ -4,6 +4,8 @@ import java.util.concurrent.atomic.AtomicReference;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.world.level.block.SaplingBlock;
+ import org.bukkit.TreeType;
++import org.bukkit.block.BlockState;
++import org.bukkit.craftbukkit.CraftChunk;
+ import org.bukkit.craftbukkit.block.CraftBlockEntityState;
+ import org.bukkit.craftbukkit.event.CraftEventFactory;
+ import org.bukkit.support.environment.Normal;
+@@ -74,4 +76,36 @@ class ThreadLocalIsolationTest {
+         assertEquals(Boolean.TRUE, CraftBlockEntityState.DISABLE_SNAPSHOT.get());
+         CraftBlockEntityState.DISABLE_SNAPSHOT.remove();
+     }
+-}
+\ No newline at end of file
++
++    @Test
++    void defaultChunkTileEntitySnapshotSettingIsHonored() {
++        boolean previousDefault = PewpewConfig.defaultChunkTileEntitySnapshotsEnabled;
++        try {
++            RecordingCraftChunk chunk = new RecordingCraftChunk();
++
++            PewpewConfig.defaultChunkTileEntitySnapshotsEnabled = false;
++            chunk.getTileEntities();
++            assertEquals(false, chunk.useSnapshot);
++
++            PewpewConfig.defaultChunkTileEntitySnapshotsEnabled = true;
++            chunk.getTileEntities();
++            assertEquals(true, chunk.useSnapshot);
++        } finally {
++            PewpewConfig.defaultChunkTileEntitySnapshotsEnabled = previousDefault;
++        }
++    }
++
++    private static final class RecordingCraftChunk extends CraftChunk {
++        private boolean useSnapshot;
++
++        private RecordingCraftChunk() {
++            super(null, 0, 0);
++        }
++
++        @Override
++        public BlockState[] getTileEntities(boolean useSnapshot) {
++            this.useSnapshot = useSnapshot;
++            return new BlockState[0];
++        }
++    }
++}
